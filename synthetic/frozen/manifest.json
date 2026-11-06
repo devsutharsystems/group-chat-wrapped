@@ -1,0 +1,12 @@
+{
+ "chat_file": "chat_synthetic.txt",
+ "ground_truth_file": "ground_truth.json",
+ "chat_sha256": "b6d3add40ae93fe79a10f79d19a0a2b374dd0ffb5c3222feaf0425a12cae13b4",
+ "ground_truth_sha256": "b3f2f5afb24df2c271fd9b3ddc1dd57c41231655275e2fb18e4672f79aca5952",
+ "n_messages": 5144,
+ "n_system": 9,
+ "lines": 5185,
+ "bytes": 571701,
+ "tokens": 241311,
+ "frozen": "2026-11-06"
+}

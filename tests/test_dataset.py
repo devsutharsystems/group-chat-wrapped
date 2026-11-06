@@ -43,3 +43,8 @@ def test_missing_file_and_manifest(tmp_path):
     (tmp_path / "gt.json").unlink()
     with pytest.raises(DatasetError, match="missing"):
         verify_dataset(tmp_path)
+
+
+def test_committed_frozen_dataset_verifies():
+    m = verify_dataset()  # default: synthetic/frozen/
+    assert (m["n_messages"], m["n_system"], m["lines"], m["bytes"], m["tokens"]) == (5144, 9, 5185, 571701, 241311)

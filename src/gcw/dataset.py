@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_DIR = ROOT / "data" / "synthetic"
+DEFAULT_DIR = ROOT / "synthetic" / "frozen"
 
 
 class DatasetError(RuntimeError):
