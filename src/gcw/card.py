@@ -92,46 +92,49 @@ def top_starter(stats: dict) -> dict | None:
 
 
 # ------------------------------------------------------------------ HTML
+ZONE2_HEIGHT = 460  # reserved block at the bottom: identical in stats-only and AI modes
 CSS = """
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;background:#fbf7ef}
-.card{width:1080px;height:1350px;padding:36px 48px 30px;display:flex;flex-direction:column;gap:16px;overflow:hidden;background:#fbf7ef;color:#1d1b17;
+.card{width:1080px;height:1350px;padding:32px 48px 28px;display:flex;flex-direction:column;gap:12px;overflow:hidden;background:#fbf7ef;color:#1d1b17;
 font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji",sans-serif}
 .card *{min-width:0}
 .name{overflow-wrap:anywhere;unicode-bidi:isolate}
-header{height:92px;flex:none}
-h1{margin:0;font-size:46px;line-height:52px;letter-spacing:-0.5px}
-.sub{margin:4px 0 0;font-size:25px;line-height:30px;color:#6b6254}
+header{height:84px;flex:none}
+h1{margin:0;font-size:44px;line-height:50px;letter-spacing:-0.5px}
+.sub{margin:2px 0 0;font-size:24px;line-height:30px;color:#6b6254}
 .zone{display:flex;align-items:center;gap:14px;height:24px;flex:none;font-size:19px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#6b6254}
 .zone::after{content:"";flex:1;height:2px;background:#e6dccb}
-.big{display:flex;gap:12px;height:136px;flex:none}
-.big .tile{flex:1}
-.tile{background:#fff;border:2px solid #e6dccb;border-radius:18px;padding:12px 16px;display:flex;flex-direction:column;gap:2px;overflow:hidden}
+.board{height:262px;flex:none;background:#fff;border:2px solid #e6dccb;border-radius:18px;padding:6px 18px;display:flex;flex-direction:column}
+.row{display:flex;align-items:center;gap:12px;height:36px;flex:none;font-size:24px;line-height:28px}
+.row.head{height:28px;font-size:17px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6b6254}
+.row .rk{width:30px;flex:none;text-align:center;color:#6b6254;font-weight:700}
+.row .nm{flex:1;font-weight:700;position:relative;padding-bottom:6px}
+.row.head .nm{padding-bottom:0}
+.row .nm.m{font-size:20px}
+.row .nm.xs{font-size:17px}
+.row .nm .bar{position:absolute;left:0;bottom:0;height:5px;border-radius:3px;background:#f3b58f}
+.row .num{width:158px;flex:none;text-align:right;font-variant-numeric:tabular-nums;padding:0 8px;border-radius:8px}
+.row .num.lead{color:#c2410c;font-weight:800;background:#fde6d6}
+.row.more{height:28px;font-size:20px;color:#6b6254}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:124px;gap:12px;flex:none}
+.tile{background:#fff;border:2px solid #e6dccb;border-radius:18px;padding:10px 16px;display:flex;flex-direction:column;gap:2px;overflow:hidden}
 .lab{font-size:18px;line-height:22px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6b6254;flex:none}
 .val{font-size:34px;line-height:40px;font-weight:800;color:#c2410c;flex:none}
 .val.m{font-size:28px;line-height:33px}
 .val.s{font-size:22px;line-height:26px}
 .val.xs{font-size:18px;line-height:22px}
-.big .val{font-size:44px;line-height:50px}
-.big .val.m{font-size:34px;line-height:40px}
-.big .val.s{font-size:26px;line-height:31px}
-.big .val.xs{font-size:20px;line-height:24px}
 .note{font-size:21px;line-height:25px;color:#4a4338;flex:none}
-.board{height:286px;flex:none;background:#fff;border:2px solid #e6dccb;border-radius:18px;padding:8px 18px;display:flex;flex-direction:column}
-.row{display:flex;align-items:center;gap:12px;height:40px;flex:none;font-size:26px;line-height:30px}
-.row.head{height:30px;font-size:17px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6b6254}
-.row .rk{width:30px;flex:none;color:#6b6254;font-weight:700}
-.row .nm{flex:1;font-weight:700;position:relative;padding-bottom:7px}
-.row.head .nm{padding-bottom:0}
-.row .nm.m{font-size:22px}
-.row .nm.xs{font-size:18px}
-.row .nm .bar{position:absolute;left:0;bottom:0;height:5px;border-radius:3px;background:#f3b58f}
-.row .num{width:158px;flex:none;text-align:right;font-variant-numeric:tabular-nums}
-.row.more{height:30px;font-size:21px;color:#6b6254}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:144px;gap:12px;flex:none}
-.zone2{height:84px;flex:none;border:3px dashed #c9bda8;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:25px;color:#6b6254}
-footer{height:52px;flex:none;text-align:center;font-size:22px;line-height:26px;color:#6b6254}
-footer .small{font-size:17px;line-height:22px}
+.strip{height:74px;flex:none;display:flex;background:#fff;border:2px solid #e6dccb;border-radius:18px}
+.strip .cell{flex:1;padding:6px 14px;border-left:2px solid #efe6d6;display:flex;flex-direction:column;justify-content:center;overflow:hidden}
+.strip .cell:first-child{border-left:0}
+.strip .sv{font-size:28px;line-height:32px;font-weight:800;color:#c2410c}
+.strip .sl{font-size:20px;color:#4a4338}
+.strip .ss{font-size:17px;line-height:20px;color:#6b6254}
+.zone2block{height:460px;flex:none;display:flex;flex-direction:column;gap:12px}
+.zone2{flex:1;border:3px dashed #c9bda8;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:25px;color:#6b6254}
+footer{height:34px;flex:none;text-align:center;font-size:22px;line-height:26px;color:#6b6254}
+footer .small{font-size:17px}
 """
 
 
@@ -151,6 +154,11 @@ def _tile(label: str, value: str, note: str = "") -> str:
     return f'<div class="tile"><div class="lab">{esc(label)}</div><div class="val name {_vc(value)}">{esc(value)}</div>{note_html}</div>'
 
 
+def _cell(value: str, label: str, sub: str = "") -> str:
+    sub_html = f'<div class="ss">{esc(sub)}</div>' if sub else ""
+    return f'<div class="cell"><div><span class="sv">{esc(value)}</span> <span class="sl">{esc(label)}</span></div>{sub_html}</div>'
+
+
 def build_card_html(stats: dict, aliases: dict[str, str] | None = None, *, date_note: str | None = None) -> str:
     """Pure function: stats dict -> complete HTML document string (no I/O, no network)."""
     aliases = aliases or {}
@@ -160,36 +168,33 @@ def build_card_html(stats: dict, aliases: dict[str, str] | None = None, *, date_
 
     w = stats["window"]
     n = w["n_messages"]
-    if n:
-        sub = f'{esc(w["first_ts"][:10])} to {esc(w["last_ts"][:10])} · {esc(fmt_int(n))} messages'
-    else:
-        sub = "No messages in this window"
+    sub = f'{esc(w["first_ts"][:10])} to {esc(w["last_ts"][:10])} · {esc(fmt_int(n))} messages' if n else "No messages in this window"
     by_msg, by_words = stats["top_talkers"]["by_messages"], stats["top_talkers"]["by_words"]
     words = {t["sender"]: t["words"] for t in by_words}
 
-    # big tiles
-    if by_msg:
-        a, b = by_msg[0], by_words[0]
-        big = (_tile("Most messages", disp(a["sender"]), f'{fmt_int(a["messages"])} messages')
-               + _tile("Most words", disp(b["sender"]), f'{fmt_int(b["words"])} words'))
-    else:
-        big = _tile("Most messages", "n/a", "no messages") + _tile("Most words", "n/a", "no messages")
-
-    # leaderboard (top 5 + "+N more")
+    # top-talkers table: the leader of each column is highlighted, so two different winners stay visible
+    lead_msg = by_msg[0]["sender"] if by_msg else None
+    lead_words = by_words[0]["sender"] if by_words else None
     rows = ['<div class="row head"><span class="rk">#</span><span class="nm">Top talkers</span><span class="num">messages</span><span class="num">words</span></div>']
     top = by_msg[:TOP_N]
     most = top[0]["messages"] if top else 1
     for i, t in enumerate(top, 1):
+        s_ = t["sender"]
         pct = max(2, round(100 * t["messages"] / most)) if most else 0
-        rows.append(f'<div class="row"><span class="rk">{i}</span><span class="nm name {_nc(disp(t["sender"]))}">{esc(disp(t["sender"]))}<span class="bar" style="width:{pct}%"></span></span>'
-                    f'<span class="num">{esc(fmt_int(t["messages"]))}</span><span class="num">{esc(fmt_int(words.get(t["sender"], 0)))}</span></div>')
+        rows.append(f'<div class="row"><span class="rk">{i}</span><span class="nm name {_nc(disp(s_))}">{esc(disp(s_))}<span class="bar" style="width:{pct}%"></span></span>'
+                    f'<span class="num{" lead" if s_ == lead_msg else ""}">{esc(fmt_int(t["messages"]))}</span>'
+                    f'<span class="num{" lead" if s_ == lead_words else ""}">{esc(fmt_int(words.get(s_, 0)))}</span></div>')
     if not top:
         rows.append('<div class="row more">No messages in this window</div>')
-    if len(by_msg) > TOP_N:
-        rows.append(f'<div class="row more">+{len(by_msg) - TOP_N} more</div>')
+    hidden = len(by_msg) - TOP_N
+    if hidden > 0:
+        extra = ""
+        if lead_words not in {t["sender"] for t in top}:  # the words leader is not in the top 5 by messages: say so here
+            extra = f' · most words: {clean_name(aliases.get(lead_words, lead_words), 18)} {fmt_int(words[lead_words])}'
+        rows.append(f'<div class="row more">+{hidden} more{esc(extra)}</div>')
     board = f'<div class="board">{"".join(rows)}</div>'
 
-    # 3x3 grid
+    # six tiles, two rows of three
     ne = stats["night_early"]
     owl, bird = ne["night_owl"], ne["early_bird"]
     sil, bd, em = stats["longest_silence"], stats["busiest_date"], stats["emojis"]
@@ -207,20 +212,24 @@ def build_card_html(stats: dict, aliases: dict[str, str] | None = None, *, date_
     else:
         tiles.append(_tile("Top starter", "n/a"))
     tiles.append(_tile("Fastest responder", disp(fr["sender"]), f'{fmt_int(fr["n"])} replies · {fmt_response(fr["median_seconds"])}') if fr else _tile("Fastest responder", "n/a (too few replies)"))
-    top_e = em["top"][0] if em["top"] else None
-    tiles.append(_tile("Emoji", f'{fmt_int(em["total"])} emoji', f'top: {top_e["emoji"]} ×{fmt_int(top_e["count"])}' if top_e else "none yet"))
-    tiles.append(_tile("Laughs", f'{fmt_int(stats["laughs"]["total"])} laughs', "messages with a laugh"))
-    tiles.append(_tile("Media and links", f'{fmt_int(stats["media"]["total"])} media', f'{fmt_int(stats["links"]["total"])} links'))
 
-    foot2 = f'<div class="small">{esc(date_note)}</div>' if date_note else ""
+    # one stat strip: emoji, laughs, media, links
+    top_e = em["top"][0] if em["top"] else None
+    strip = "".join([
+        _cell(fmt_int(em["total"]), "emoji", f'top: {top_e["emoji"]} ×{fmt_int(top_e["count"])}' if top_e else "none yet"),
+        _cell(fmt_int(stats["laughs"]["total"]), "laughs"),
+        _cell(fmt_int(stats["media"]["total"]), "media"),
+        _cell(fmt_int(stats["links"]["total"]), "links"),
+    ])
+
+    foot2 = f' <span class="small">· {esc(date_note)}</span>' if date_note else ""
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; img-src data:\">"
         f"<title>Group Chat Wrapped</title><style>{CSS}</style></head><body>"
         f'<div class="card"><header><h1>Group Chat Wrapped</h1><div class="sub">{sub}</div></header>'
-        '<div class="zone">By the numbers</div>'
-        f'<div class="big">{big}</div>{board}<div class="grid">{"".join(tiles)}</div>'
-        f'<div class="zone">From the chat</div><div class="zone2">{esc(ZONE2_OFF)}</div>'
+        f'<div class="zone">By the numbers</div>{board}<div class="grid">{"".join(tiles)}</div><div class="strip">{strip}</div>'
+        f'<div class="zone2block"><div class="zone">From the chat</div><div class="zone2">{esc(ZONE2_OFF)}</div></div>'
         f"<footer>{esc(FOOTER)}{foot2}</footer></div></body></html>"
     )
 
@@ -257,7 +266,9 @@ _MEASURE_JS = """() => {
     if (r.width > 0 && (r.left < c.left - 0.5 || r.right > c.right + 0.5 || r.top < c.top - 0.5 || r.bottom > c.bottom + 0.5)) bad.push({tag, kind: 'outside', a: Math.round(r.bottom), b: Math.round(c.bottom)});
   }
   const de = document.documentElement;
-  return {bad, root: [de.scrollWidth, de.clientWidth, de.scrollHeight, de.clientHeight], card: [Math.round(c.width), Math.round(c.height)]};
+  const z2 = document.querySelector('.zone2block');
+  const zr = z2 ? z2.getBoundingClientRect() : {width: 0, height: 0};
+  return {bad, root: [de.scrollWidth, de.clientWidth, de.scrollHeight, de.clientHeight], card: [Math.round(c.width), Math.round(c.height)], zone2: [zr.width, zr.height]};
 }"""
 
 

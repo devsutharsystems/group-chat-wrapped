@@ -23,11 +23,22 @@ FROZEN_PATH = ROOT / "synthetic" / "frozen" / "chat_synthetic.txt"
 
 
 # ---------------------------------------------------------------- helpers
+BROWSER_CREATED = False  # set when the lazily created session browser comes into existence
+
+
 @pytest.fixture(scope="session")
 def browser():
     """ONE Chromium for the whole test session (--disable-gpu); closed at the end."""
+    global BROWSER_CREATED
     with card.chromium() as b:
+        BROWSER_CREATED = True
         yield b
+
+
+def assert_no_session_browser() -> None:
+    """The subprocess render tests start their own Chromium, so they must run BEFORE the session browser exists."""
+    assert not BROWSER_CREATED, ("one-browser rule broken: the session browser already exists, so a second Chromium would start. "
+                                 "Keep the subprocess render tests above every test that uses the `browser` fixture (or run them alone).")
 
 
 class _Text(HTMLParser):
@@ -60,6 +71,15 @@ def visible_text(html: str) -> str:
     return re.sub(r"(?<=\d),(?=\d{3})", "", text)
 
 
+ROW = re.compile(r'<div class="row"><span class="rk">(\d)</span><span class="nm[^"]*">(.*?)<span class="bar"[^>]*></span></span>'
+                 r'<span class="num( lead)?">([\d,]+)</span><span class="num( lead)?">([\d,]+)</span></div>')
+
+
+def leaderboard(html: str) -> list[dict]:
+    return [{"rank": int(r), "name": n, "messages": int(m.replace(",", "")), "words": int(w.replace(",", "")), "lead_msg": bool(lm), "lead_words": bool(lw)}
+            for r, n, lm, m, lw, w in ROW.findall(html)]
+
+
 def png_size(png: bytes) -> tuple[int, int]:
     return Image.open(io.BytesIO(png)).size
 
@@ -87,6 +107,7 @@ def assert_clean(res: dict) -> None:
     ov = res["overflow"]
     assert ov["bad"] == [], ov["bad"][:5]
     assert ov["root"] == [1080, 1080, 1350, 1350] and ov["card"] == [1080, 1350]
+    assert ov["zone2"] == [984, card.ZONE2_HEIGHT] and card.ZONE2_HEIGHT == 460  # the reserved AI block, same size in every mode
     assert png_size(res["png"]) == (1080, 1350)
 
 
@@ -107,6 +128,7 @@ def test_cli_and_card_never_import_anthropic():
 
 
 def test_cli_end_to_end_makes_a_png_without_anthropic(tmp_path):
+    assert_no_session_browser()
     lines = [f"3/{2 + (n // 20)}/26, 9:{n % 20:02d} PM - {['Sam', 'Alex'][n % 2]}: message {n}" for n in range(40)]
     chat = tmp_path / "chat.txt"
     chat.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -132,8 +154,39 @@ def test_cli_rejects_missing_file_and_bad_aliases(tmp_path):
     assert main(["stats-card", str(chat), "--out", str(tmp_path / "o.png")]) == 3
 
 
+def test_one_browser_guard_fires_when_a_session_browser_exists(monkeypatch):
+    assert_no_session_browser()  # passes now: nothing has created the session browser yet in this ordering
+    monkeypatch.setattr(sys.modules[__name__], "BROWSER_CREATED", True)
+    with pytest.raises(AssertionError, match="one-browser rule broken"):
+        assert_no_session_browser()
+
+
+def _editable_pth_is_hidden() -> bool:
+    import glob
+    import stat
+
+    site = Path(sys.prefix) / "lib"
+    hits = glob.glob(str(site / "python3*" / "site-packages" / "__editable__*group_chat_wrapped*.pth"))
+    return bool(hits) and all(getattr(Path(h).stat(), "st_flags", 0) & getattr(stat, "UF_HIDDEN", 0x8000) for h in hits)
+
+
+def test_python_m_gcw_works_without_pythonpath(tmp_path):
+    """The editable install must make `python -m gcw` importable with no PYTHONPATH and from another directory."""
+    import os
+
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    r = subprocess.run([sys.executable, "-m", "gcw", "--help"], env=env, cwd=tmp_path, capture_output=True, text=True)
+    if r.returncode != 0 and _editable_pth_is_hidden():
+        pytest.skip("macOS flagged the editable-install .pth file as hidden, and Python ignores hidden .pth files; "
+                    "this machine re-applies the flag within seconds, so the editable install cannot be verified here (see README)")
+    hint = ("If this says 'No module named gcw': run `.venv/bin/pip install -e .`; on macOS also run "
+            "`chflags nohidden .venv/lib/python3.*/site-packages/__editable__*.pth` (Python skips .pth files that macOS flagged hidden).")
+    assert r.returncode == 0 and "stats-card" in r.stdout, f"{r.stderr.strip()[-300:]}\n{hint}"
+
+
 def test_chromium_is_launched_with_disable_gpu_scale_1_and_closed():
     """Runs in a subprocess (Playwright's sync API cannot nest) under nice, and before the session browser exists."""
+    assert_no_session_browser()
     assert card.CHROMIUM_ARGS == ["--disable-gpu"]
     code = ("import sys; from gcw import card\n"
             "with card.chromium() as b:\n"
@@ -231,7 +284,10 @@ def frozen_card():
 def test_frozen_card_text_has_the_counted_values(frozen_card):
     _, html = frozen_card
     t = visible_text(html)
-    for want in ["Riley 1316 messages", "Maya 22872 words", "14d 21h 56m", "2026-02-07" + " 201 messages", "1121 emoji", "2 links", "136 media",
+    board = {r["name"]: r for r in leaderboard(html)}
+    assert board["Riley"]["messages"] == 1316 and board["Maya"]["words"] == 22872  # same values, now read from the top-talkers table
+    assert [r["name"] for r in leaderboard(html) if r["lead_msg"]] == ["Riley"] and [r["name"] for r in leaderboard(html) if r["lead_words"]] == ["Maya"]  # two different leaders
+    for want in ["14d 21h 56m", "2026-02-07" + " 201 messages", "1121 emoji", "2 links", "136 media",
                  "Night owl Maya", "Early bird Jordan", "By the numbers", "From the chat", "AI sections off (stats-only mode)", "Counted locally. No AI used."]:
         assert want in t, want
     assert "+1 more" in t  # 6 senders: top 5 shown plus one more
@@ -289,6 +345,17 @@ def test_layout_cases_have_no_overflow(browser, label, names):
         assert "+7 more" in text and "Member 06" not in text.split("Top talkers")[1].split("Night owl")[0]  # 5 shown, 7 hidden
     if label == "30-character names":
         assert LONG30 in text and "W" * 30 in text
+
+
+def test_words_leader_outside_top_five_is_named_in_the_more_row(browser):
+    names = [f"Member {i:02d}" for i in range(1, 13)]
+    df = busy_frame(names)
+    df.loc[df["sender"] == "Member 12", "text"] = "a very long message with many many words in it " * 3
+    res = render_case(browser, compute_stats(df))
+    assert_clean(res)
+    t = visible_text(res["html"])
+    assert "+7 more · most words: Member 12" in t
+    assert not [r for r in leaderboard(res["html"]) if r["lead_words"]]  # the words leader is not among the 5 rows shown
 
 
 def test_layout_empty_window(browser):

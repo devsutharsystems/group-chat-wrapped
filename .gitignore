@@ -18,3 +18,4 @@ notes/
 .claude/settings.local.json
 data/synthetic/
 aliases.json
+*.egg-info/
