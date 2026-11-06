@@ -41,3 +41,11 @@ Silence: the gaps between consecutive kept messages are 20m, 5m, 0, 65m, 30m, 13
 - The longest silence ignores deleted messages: a deleted message does not split a gap (the population is `messages(df)`).
 - Laughs are English-style only (`haha`, `lol`, `lmao`, `rofl` and two laughing emoji); other languages are not detected.
 - Timestamps have minute resolution (WhatsApp exports have no seconds), so response times are multiples of 60 seconds in practice: a reply in the same minute is 0 s and the next minute is 60 s. Response-time medians therefore separate senders only coarsely.
+
+## Fastest responder (card rule)
+
+`compute_stats` keeps the per-sender median response time. The card shows a "fastest responder" tile only when (a) the winner has at least 20 response samples and (b) first place beats second place by at least 120 s. Reason: timestamps have minute resolution, so a 50 s reply can read 0 s while a 10 s reply reads 60 s; a gap under 120 s can be pure rounding. On the frozen chat the gap is exactly 60 s (Riley 0 s, five senders 60 s), so the tile is dropped and "Busiest weekday and hour" takes its place. Tests: `test_fastest_responder_needs_a_120s_gap`, `test_fastest_responder_tile_shows_with_a_120s_gap_and_is_replaced_otherwise`, `test_frozen_fastest_responder_and_top_starter_from_plain_loops`.
+
+## Known stale check
+
+Card mutation pass is stale (CSS patterns changed with the new layout). Re-run after Zone 2 exists.

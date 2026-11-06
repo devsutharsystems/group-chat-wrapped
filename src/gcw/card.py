@@ -22,6 +22,7 @@ os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(ROOT / ".cache" / "ms-play
 
 WIDTH, HEIGHT = 1080, 1350
 MIN_RESPONSE_SAMPLES = 20
+MIN_RESPONSE_GAP_S = 120  # first place must beat second by this much: minute resolution makes a 50 s reply read 0 s and a 10 s reply read 60 s
 MAX_NAME_CHARS = 30
 TOP_N = 5
 CHROMIUM_ARGS = ["--disable-gpu"]
@@ -73,13 +74,20 @@ def load_aliases(path: str | Path) -> dict[str, str]:
     return data
 
 
-def fastest_responder(stats: dict, min_samples: int = MIN_RESPONSE_SAMPLES) -> dict | None:
-    """Lowest median response time among senders with at least `min_samples` replies; ties go to the earlier name."""
-    cands = [(v["median_seconds"], s, v["n"]) for s, v in stats["response_time"].items() if v["n"] >= min_samples and v["median_seconds"] is not None]
-    if not cands:
+def fastest_responder(stats: dict, min_samples: int = MIN_RESPONSE_SAMPLES, min_gap: float = MIN_RESPONSE_GAP_S) -> dict | None:
+    """Lowest median response time among senders with at least `min_samples` replies (ties go to the earlier name).
+    None when nobody qualifies or when second place is less than `min_gap` seconds behind (too close to call at minute resolution)."""
+    cands = sorted((v["median_seconds"], s, v["n"]) for s, v in stats["response_time"].items() if v["n"] >= min_samples and v["median_seconds"] is not None)
+    if not cands or (len(cands) > 1 and cands[1][0] - cands[0][0] < min_gap):
         return None
-    med, sender, n = min(cands)
+    med, sender, n = cands[0]
     return {"sender": sender, "median_seconds": med, "n": n}
+
+
+def busiest_weekday_hour(stats: dict) -> tuple[str, int] | None:
+    b = stats["busiest"]
+    wd, hr = b["weekday"]["overall"], b["hour"]["overall"]
+    return None if wd is None or hr is None else (wd, hr)
 
 
 def top_starter(stats: dict) -> dict | None:
@@ -120,6 +128,7 @@ h1{margin:0;font-size:44px;line-height:50px;letter-spacing:-0.5px}
 .grid{display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:124px;gap:12px;flex:none}
 .tile{background:#fff;border:2px solid #e6dccb;border-radius:18px;padding:10px 16px;display:flex;flex-direction:column;gap:2px;overflow:hidden}
 .lab{font-size:18px;line-height:22px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6b6254;flex:none}
+.lab.s{font-size:15px;letter-spacing:0.5px}
 .val{font-size:34px;line-height:40px;font-weight:800;color:#c2410c;flex:none}
 .val.m{font-size:28px;line-height:33px}
 .val.s{font-size:22px;line-height:26px}
@@ -151,7 +160,7 @@ def _nc(text: str) -> str:
 
 def _tile(label: str, value: str, note: str = "") -> str:
     note_html = f'<div class="note name">{esc(note)}</div>' if note else ""
-    return f'<div class="tile"><div class="lab">{esc(label)}</div><div class="val name {_vc(value)}">{esc(value)}</div>{note_html}</div>'
+    return f'<div class="tile"><div class="lab{" s" if len(label) > 17 else ""}">{esc(label)}</div><div class="val name {_vc(value)}">{esc(value)}</div>{note_html}</div>'
 
 
 def _cell(value: str, label: str, sub: str = "") -> str:
@@ -211,7 +220,13 @@ def build_card_html(stats: dict, aliases: dict[str, str] | None = None, *, date_
         tiles.append(_tile("Top starter", disp(st["sender"]), f'{st["count"]} starts{tie}'))
     else:
         tiles.append(_tile("Top starter", "n/a"))
-    tiles.append(_tile("Fastest responder", disp(fr["sender"]), f'{fmt_int(fr["n"])} replies · {fmt_response(fr["median_seconds"])}') if fr else _tile("Fastest responder", "n/a (too few replies)"))
+    bwh = busiest_weekday_hour(stats)
+    if fr:  # only when first place is at least 120 s ahead of second
+        tiles.append(_tile("Fastest responder", disp(fr["sender"]), f'{fmt_int(fr["n"])} replies · {fmt_response(fr["median_seconds"])}'))
+    elif bwh:
+        tiles.append(_tile("Busiest weekday and hour", f"{bwh[0][:3]} {bwh[1]:02d}:00", f"{bwh[0]}, {bwh[1]:02d}:00-{bwh[1]:02d}:59"))
+    else:
+        tiles.append(_tile("Busiest weekday and hour", "n/a"))
 
     # one stat strip: emoji, laughs, media, links
     top_e = em["top"][0] if em["top"] else None

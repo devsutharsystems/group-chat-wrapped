@@ -7,11 +7,11 @@ Spotify-Wrapped-style card for a WhatsApp group (Python, pandas, Claude Haiku). 
 ```sh
 python3 -m venv .venv
 PIP_CACHE_DIR=.cache/pip .venv/bin/pip install -r requirements.txt
-PIP_CACHE_DIR=.cache/pip .venv/bin/pip install -e .          # makes `python -m gcw` work from any directory
+PIP_CACHE_DIR=.cache/pip .venv/bin/pip install .             # users: regular (non-editable) install
 PLAYWRIGHT_BROWSERS_PATH=.cache/ms-playwright .venv/bin/python -m playwright install chromium
 ```
 
-macOS note: Python ignores `.pth` files that macOS has flagged hidden. On the machine this was developed on, the flag was re-applied to the editable-install `.pth` within seconds, so `python -m gcw` could fail with "No module named gcw". If that happens, run with `PYTHONPATH=src` (for example `PYTHONPATH=src .venv/bin/python -m gcw ...`) or try `chflags nohidden .venv/lib/python3.*/site-packages/__editable__*.pth`. (Observed here; the cause is unverified.)
+Developers run from the source tree with `PYTHONPATH=src .venv/bin/python -m gcw ...` (no editable install). macOS can flag the `.pth` file of an editable install as hidden and Python 3.13+ skips hidden `.pth` files; that is the likely cause of the failed editable install here, not verified.
 
 ## Stats card (no AI, no API calls)
 

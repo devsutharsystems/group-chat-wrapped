@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import re
+import shutil
 import subprocess
 import sys
 from html.parser import HTMLParser
@@ -161,27 +162,22 @@ def test_one_browser_guard_fires_when_a_session_browser_exists(monkeypatch):
         assert_no_session_browser()
 
 
-def _editable_pth_is_hidden() -> bool:
-    import glob
-    import stat
-
-    site = Path(sys.prefix) / "lib"
-    hits = glob.glob(str(site / "python3*" / "site-packages" / "__editable__*group_chat_wrapped*.pth"))
-    return bool(hits) and all(getattr(Path(h).stat(), "st_flags", 0) & getattr(stat, "UF_HIDDEN", 0x8000) for h in hits)
-
-
-def test_python_m_gcw_works_without_pythonpath(tmp_path):
-    """The editable install must make `python -m gcw` importable with no PYTHONPATH and from another directory."""
+def test_python_m_gcw_works_from_a_non_editable_install(tmp_path):
+    """Cannot skip: install the project (no deps) into a scratch target, then run `python -m gcw --help` with PYTHONPATH set
+    ONLY to that target (no src), from another directory."""
     import os
 
+    target = ROOT / ".cache" / "tmp" / "site"
+    shutil.rmtree(target, ignore_errors=True)
     env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    env["PIP_CACHE_DIR"] = str(ROOT / ".cache" / "pip")
+    inst = subprocess.run([sys.executable, "-m", "pip", "install", "--no-deps", "--target", str(target), str(ROOT)], env=env, capture_output=True, text=True)
+    assert inst.returncode == 0, inst.stderr[-500:]
+    env["PYTHONPATH"] = str(target)  # only the installed copy: no src
     r = subprocess.run([sys.executable, "-m", "gcw", "--help"], env=env, cwd=tmp_path, capture_output=True, text=True)
-    if r.returncode != 0 and _editable_pth_is_hidden():
-        pytest.skip("macOS flagged the editable-install .pth file as hidden, and Python ignores hidden .pth files; "
-                    "this machine re-applies the flag within seconds, so the editable install cannot be verified here (see README)")
-    hint = ("If this says 'No module named gcw': run `.venv/bin/pip install -e .`; on macOS also run "
-            "`chflags nohidden .venv/lib/python3.*/site-packages/__editable__*.pth` (Python skips .pth files that macOS flagged hidden).")
-    assert r.returncode == 0 and "stats-card" in r.stdout, f"{r.stderr.strip()[-300:]}\n{hint}"
+    assert r.returncode == 0 and "stats-card" in r.stdout, r.stderr[-300:]
+    where = subprocess.run([sys.executable, "-c", "import gcw; print(gcw.__file__)"], env=env, cwd=tmp_path, capture_output=True, text=True).stdout.strip()
+    assert where.startswith(str(target)), where  # really the installed copy, not src
 
 
 def test_chromium_is_launched_with_disable_gpu_scale_1_and_closed():
@@ -264,12 +260,34 @@ def test_fastest_responder_hand_table_nobody_qualifies():
     stats = compute_stats(frame())
     assert {s: v["n"] for s, v in stats["response_time"].items()} == {"Sam": 2, "Alex": 2, "Maya": 4}
     assert card.fastest_responder(stats) is None
-    assert "Fastest responder n/a (too few replies)" in visible_text(card.build_card_html(stats))
+    t = visible_text(card.build_card_html(stats))
+    assert "Fastest responder" not in t and "Busiest weekday and hour Mon 08:00" in t  # hand table: Monday, hour 8
 
 
 def test_fastest_responder_tie_goes_to_earlier_name():
     stats = {"response_time": {"Zed": {"median_seconds": 60.0, "n": 30}, "Amy": {"median_seconds": 60.0, "n": 25}, "Bob": {"median_seconds": 30.0, "n": 5}}}
-    assert card.fastest_responder(stats)["sender"] == "Amy"  # Bob is faster but has only 5 samples
+    assert card.fastest_responder(stats, min_gap=0)["sender"] == "Amy"  # Bob is faster but has only 5 samples; gap rule switched off here
+    assert card.fastest_responder(stats) is None  # tie = 0 s gap, under the 120 s rule
+
+
+def synthetic_response_stats(gap: float) -> dict:
+    return {"response_time": {"Ann": {"median_seconds": 0.0, "n": 50}, "Ben": {"median_seconds": gap, "n": 50}}}
+
+
+def test_fastest_responder_needs_a_120s_gap():
+    assert card.fastest_responder(synthetic_response_stats(119.0)) is None
+    assert card.fastest_responder(synthetic_response_stats(60.0)) is None  # the frozen chat: exactly 60 s
+    assert card.fastest_responder(synthetic_response_stats(120.0)) == {"sender": "Ann", "median_seconds": 0.0, "n": 50}
+
+
+def test_fastest_responder_tile_shows_with_a_120s_gap_and_is_replaced_otherwise(frozen_card):
+    stats, html = frozen_card
+    base = {**stats, "response_time": synthetic_response_stats(120.0)["response_time"]}
+    t = visible_text(card.build_card_html(base))
+    assert "Fastest responder Ann 50 replies" in t and "Busiest weekday and hour" not in t
+    close = {**stats, "response_time": synthetic_response_stats(60.0)["response_time"]}
+    t = visible_text(card.build_card_html(close))
+    assert "Fastest responder" not in t and "Busiest weekday and hour" in t
 
 
 # ---------------------------------------------------------------- frozen chat values on the card
@@ -312,8 +330,8 @@ def test_frozen_fastest_responder_and_top_starter_from_plain_loops(frozen_card):
     best = max(starts.values())
     tied = sorted(s for s, v in starts.items() if v == best)
     t = visible_text(html)
-    assert qual[0][1] == "Riley" and card.fastest_responder(stats)["sender"] == "Riley"
-    assert f"Fastest responder {qual[0][1]} {len(delays[qual[0][1]])} replies" in t and "under 1 min" in t
+    assert qual[0][1] == "Riley" and qual[1][0] - qual[0][0] == 60  # first place leads by exactly 60 s: under the 120 s rule
+    assert card.fastest_responder(stats) is None and "Fastest responder" not in t and "Busiest weekday and hour" in t
     assert tied == ["Maya", "Riley"] and f"Top starter {tied[0]} {best} starts, tied with {tied[1]}" in t
 
 
