@@ -171,6 +171,12 @@ def skeleton(cfg: dict, seed: int | None = None, *, mini: bool = False) -> Skele
     r_days = random.Random(f"{seed}:days")
     r_topic = random.Random(f"{seed}:topic")
     r_plant = random.Random(f"{seed}:plant")
+    deck: list[str] = []
+
+    def next_topic() -> str:  # shuffled deck: no repeats until all topics are used
+        if not deck:
+            deck.extend(r_topic.sample(cfg["topics"], len(cfg["topics"])))
+        return deck.pop()
 
     silence: set[date] = set()
     if not mini:
@@ -192,7 +198,7 @@ def skeleton(cfg: dict, seed: int | None = None, *, mini: bool = False) -> Skele
         p = cfg["mini"]["burst_prob"] if mini else (cfg["burst_prob_weekend"] if d.weekday() >= 5 else cfg["burst_prob_weekday"])
         if r_days.random() < p:
             n = r_days.randint(*cfg["burst_size"])
-            bursts.append(_make_burst(cfg, random.Random(f"{seed}:b:{d.isoformat()}"), bid, d, n, r_topic.choice(cfg["topics"]), "normal", start))
+            bursts.append(_make_burst(cfg, random.Random(f"{seed}:b:{d.isoformat()}"), bid, d, n, next_topic(), "normal", start))
             bid += 1
     planted: list[Planted] = []
     if not mini:
@@ -265,6 +271,8 @@ class BatchSpec:
     topic: str
     n: int
     speakers: list[tuple[str, str]]
+    cards: dict[str, str] = field(default_factory=dict)
+    banned: list[str] = field(default_factory=list)
 
     @property
     def label(self) -> str:
@@ -272,6 +280,8 @@ class BatchSpec:
 
     def prompt(self) -> str:
         lines = "\n".join(f"{i}. {s} ({h}: {LEN_WORDS[h]})" for i, (s, h) in enumerate(self.speakers, 1))
+        cards = "\n".join(f"- {n}: {c}" for n, c in self.cards.items())
+        ban = "; ".join(f'"{b}"' for b in self.banned)
         cont = f"This is part {self.part + 1} of {self.parts} of one longer conversation on the same topic; continue naturally.\n" if self.parts > 1 else ""
         return (
             f"You are writing filler for a synthetic group-chat dataset. Write {self.n} chat messages that are part of one ordinary "
@@ -279,17 +289,29 @@ class BatchSpec:
             "Rules: mundane everyday chatter only. No jokes, no catchphrases or recurring bits. No sensitive topics (health, money, religion, politics). "
             "No real people, places or brands. No phone numbers, email addresses or links. At most an occasional single emoji. "
             "Do not mention anyone by name except the speakers.\n"
+            f"Each speaker has a distinct voice:\n{cards}\n"
+            f"Avoid these stock phrases (use each at most once in the whole batch, ideally never): {ban}. "
+            "Do not open several messages with the same words and do not repeat a sentence.\n"
             f"Speakers, in order, with the length each message should have:\n{lines}\n"
             f'Return JSON {{"messages":[{{"i":1,"text":"..."}}, ...]}} with exactly {self.n} items, i from 1 to {self.n}. '
             "Each text is only what that speaker types: no speaker name, no timestamp, a single line."
         )
 
 
-def batch_specs(sk: Skeleton) -> list[BatchSpec]:
+def style_card(m: dict) -> str:
+    st = m["style"]
+    return f"favours words like {', '.join(st['vocab'])}; typical length {st['length']}; emoji: {st['emoji']}"
+
+
+def batch_specs(sk: Skeleton, cfg: dict | None = None) -> list[BatchSpec]:
+    cfg = cfg or load_config()
+    card = {m["name"]: style_card(m) for m in cfg["members"]}
+    banned = cfg.get("banned_phrases", [])
     specs = []
     for b in sk.bursts:
         for p, (a, z) in enumerate(b.chunks):
-            specs.append(BatchSpec(b.id, p, len(b.chunks), b.topic, z - a, [(s.sender, s.len_hint) for s in b.slots[a:z]]))
+            sp = [(s.sender, s.len_hint) for s in b.slots[a:z]]
+            specs.append(BatchSpec(b.id, p, len(b.chunks), b.topic, z - a, sp, {n: card[n] for n in dict.fromkeys(x for x, _ in sp)}, banned))
     return specs
 
 
@@ -300,7 +322,7 @@ class BatchFailed(RuntimeError):
 _BAD = re.compile(r"@|https?:|www\.|\d{7,}")
 
 
-def validate_messages(parsed: Any, n: int) -> list[str]:
+def validate_messages(parsed: Any, n: int, banned: list[str] | None = None) -> list[str]:
     msgs = (parsed or {}).get("messages") if isinstance(parsed, dict) else None
     if not isinstance(msgs, list) or len(msgs) != n:
         raise BatchFailed(f"wrong message count: got {len(msgs) if isinstance(msgs, list) else 'none'}, want {n}")
@@ -312,6 +334,10 @@ def validate_messages(parsed: Any, n: int) -> list[str]:
         if not t or _BAD.search(t) or t.startswith("<"):
             raise BatchFailed("empty or disallowed text in a message")
         texts.append(t)
+    blob = "\n".join(texts).lower()
+    for b in banned or []:
+        if blob.count(b.lower()) > 1:
+            raise BatchFailed(f'banned phrase used more than once: "{b}"')
     return texts
 
 
@@ -357,7 +383,7 @@ class ApiFiller:
             try:
                 if not res.ok:
                     raise BatchFailed(res.note)
-                texts = validate_messages(res.parsed, spec.n)
+                texts = validate_messages(res.parsed, spec.n, spec.banned)
             except BatchFailed as e:
                 last = str(e)
                 self.log(f"FAILED {spec.label} attempt {attempt}: {last} (stop={res.stop_reason}, out={res.usage.get('output_tokens')}, think={th})")
@@ -479,6 +505,9 @@ def collect(specs: list[BatchSpec], filler: Callable[[BatchSpec], list[str]], wo
                 failures.append(f"COST STOP: {e}")
             except BatchFailed as e:
                 failures.append(str(e))
+            except Exception as e:  # API/transport error: stop everything, never retry here
+                stop.set()
+                failures.append(f"API ERROR {type(e).__name__}: {e}")
             done += 1
             if done % 10 == 0 or done == len(specs):
                 log(f"progress {done}/{len(specs)} batches, {len(failures)} failure(s)")
@@ -486,23 +515,35 @@ def collect(specs: list[BatchSpec], filler: Callable[[BatchSpec], list[str]], wo
 
 
 def estimate(cfg: dict, mini: bool, *, client: Any = None) -> dict:
-    """Estimate a run. Worst case = every call uses max_tokens. Expected = scaled from cached real batches (if any)."""
+    """Exact input via count_tokens WITH output_config (needs a client); output scaled from cached real batches."""
     from gcw import cost, llm
 
     sk = skeleton(cfg, mini=mini)
-    specs = batch_specs(sk)
-    rep = max(specs, key=lambda s: s.n).prompt()
-    in_tok = llm.count_tokens(rep, client=client) if client else llm.rough_prompt_tokens(rep)
-    worst = sum(cost.estimate_usd(in_tok, max_tokens_for(cfg, s.n)) for s in specs)
-    out = {"n_batches": len(specs), "n_bursts": len(sk.bursts), "approx_messages": sum(s.n for s in specs) + len(sk.planted), "prompt_tokens_per_call": in_tok, "worst_case_usd": round(worst, 4)}
+    specs = batch_specs(sk, cfg)
+    if client:
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            ins = list(ex.map(lambda s: llm.count_tokens(s.prompt(), client=client, schema=SCHEMA), specs))
+    else:
+        ins = [llm.rough_prompt_tokens(s.prompt()) for s in specs]
+    n_msgs = sum(s.n for s in specs) + len(sk.planted)
+    out = {"n_batches": len(specs), "n_bursts": len(sk.bursts), "approx_messages": n_msgs, "input_tokens_total": sum(ins), "input_exact": bool(client), "max_input_per_call": max(ins),
+           "worst_case_usd": round(sum(cost.estimate_usd(i, max_tokens_for(cfg, s.n, 0)) for i, s in zip(ins, specs)), 4)}
     cached = [json.loads(f.read_text()) for f in CACHE_DIR.glob("*.json")] if CACHE_DIR.exists() else []
+    cached = [c for c in cached if (c["usage"].get("output_tokens_details") or {}).get("thinking_tokens", 0) == 0]
     if cached:
         n_tot = sum(len(c["texts"]) for c in cached)
-        out_per_msg = sum(c["usage"]["output_tokens"] for c in cached) / n_tot
-        avg_in = sum(c["usage"]["input_tokens"] for c in cached) / len(cached)
-        expected = sum(avg_in * 0.10 + s.n * out_per_msg * 0.50 for s in specs) / 1e6
-        out["from_cached_batches"] = {"batches": len(cached), "output_tokens_per_message": round(out_per_msg, 1), "avg_input_tokens": round(avg_in)}
-        out["expected_usd"] = round(expected * 1.3, 4)  # 1.3x safety margin
+        opm = sum(c["usage"]["output_tokens"] for c in cached) / n_tot
+        exp = (sum(ins) * 0.10 + sum(s.n for s in specs) * opm * 0.50) / 1e6
+        out["output_tokens_per_message"] = round(opm, 1)
+        out["expected_usd"] = round(exp, 4)
+        out["expected_usd_with_1.3_margin"] = round(exp * 1.3, 4)
+    mini_chat = OUT_DIR / "chat_mini.txt"
+    if client and mini_chat.exists() and not mini:
+        t = mini_chat.read_text(encoding="utf-8")
+        n_lines = sum(1 for l in t.splitlines() if "\u202f" in l)
+        tpl = llm.count_tokens(t, client=client) / n_lines
+        out["final_text_tokens_per_line"] = round(tpl, 1)
+        out["final_text_tokens_est"] = round(tpl * (n_msgs + 9))
     return out
 
 

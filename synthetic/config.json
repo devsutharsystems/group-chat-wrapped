@@ -16,7 +16,17 @@
         0.5,
         0.2
       ],
-      "weekend": 1.0
+      "weekend": 1.0,
+      "style": {
+        "vocab": [
+          "honestly",
+          "pretty much",
+          "I'll sort it",
+          "probably"
+        ],
+        "length": "8-14 words, complete sentences, calm and measured",
+        "emoji": "almost never; at most a thumbs-up"
+      }
     },
     {
       "name": "Alex",
@@ -30,7 +40,18 @@
         0.18,
         0.02
       ],
-      "weekend": 1.0
+      "weekend": 1.0,
+      "style": {
+        "vocab": [
+          "yeah",
+          "ok",
+          "hm",
+          "maybe",
+          "nah"
+        ],
+        "length": "2-5 words, lowercase, minimal punctuation",
+        "emoji": "never"
+      }
     },
     {
       "name": "Maya",
@@ -44,7 +65,18 @@
         0.5,
         0.3
       ],
-      "weekend": 1.2
+      "weekend": 1.2,
+      "style": {
+        "vocab": [
+          "wait",
+          "ugh",
+          "tbh",
+          "apparently",
+          "honestly though"
+        ],
+        "length": "15-30 words, rambling late-night thoughts that trail off",
+        "emoji": "an occasional moon or sleepy face"
+      }
     },
     {
       "name": "Jordan",
@@ -58,7 +90,18 @@
         0.5,
         0.2
       ],
-      "weekend": 0.8
+      "weekend": 0.8,
+      "style": {
+        "vocab": [
+          "morning",
+          "quick one",
+          "plan",
+          "tidy",
+          "early"
+        ],
+        "length": "8-16 words, practical and organised, proposes concrete steps",
+        "emoji": "frequent; sun, coffee or checkmark"
+      }
     },
     {
       "name": "Riley",
@@ -72,7 +115,18 @@
         0.25,
         0.05
       ],
-      "weekend": 1.0
+      "weekend": 1.0,
+      "style": {
+        "vocab": [
+          "wait",
+          "ok ok",
+          "literally",
+          "no way",
+          "hang on"
+        ],
+        "length": "1-6 words, fast fragments, sometimes ALL CAPS for one word",
+        "emoji": "heavy; laughing or sweating face, often doubled"
+      }
     },
     {
       "name": "Kai",
@@ -86,7 +140,18 @@
         0.45,
         0.3
       ],
-      "weekend": 2.2
+      "weekend": 2.2,
+      "style": {
+        "vocab": [
+          "ooh",
+          "nice",
+          "oh wow",
+          "let's",
+          "weekend"
+        ],
+        "length": "10-22 words, enthusiastic, likes making plans",
+        "emoji": "moderate; party or raised hands"
+      }
     }
   ],
   "burst_size": [
@@ -349,5 +414,20 @@
   ],
   "thinking": {
     "type": "disabled"
-  }
+  },
+  "banned_phrases": [
+    "sounds good",
+    "sounds great",
+    "sounds fair",
+    "sure thing",
+    "no worries",
+    "works for me",
+    "good idea",
+    "makes sense",
+    "got it",
+    "of course",
+    "absolutely",
+    "that works",
+    "deal"
+  ]
 }

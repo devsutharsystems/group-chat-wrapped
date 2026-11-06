@@ -213,3 +213,53 @@ def test_collect_stops_on_cost_error(tmp_path):
     f = g.ApiFiller(CFG, guard, confirm=True, thinking=100, log=lambda m: None, client=Client([]), cache_dir=tmp_path / "cache")
     fills, failures = g.collect(specs, f, 4, lambda m: None)
     assert fills == {} and any("COST STOP" in x for x in failures)
+
+
+# ---- style cards, banned phrases, topics ----
+def test_every_member_has_style_card_and_banned_list():
+    assert all({"vocab", "length", "emoji"} <= set(m["style"]) for m in CFG["members"])
+    assert len({m["style"]["length"] for m in CFG["members"]}) == 6 and len(CFG["banned_phrases"]) >= 8
+    s = g.batch_specs(g.skeleton(CFG, mini=True))[0]
+    p = s.prompt()
+    assert all(n in p for n, _ in s.speakers) and "sounds good" in p and "favours words like" in p
+
+
+def test_banned_phrase_more_than_once_fails():
+    ok = {"messages": [{"i": 1, "text": "Sounds good to me"}, {"i": 2, "text": "plain"}]}
+    assert g.validate_messages(ok, 2, ["sounds good"]) == ["Sounds good to me", "plain"]
+    bad = {"messages": [{"i": 1, "text": "Sounds good"}, {"i": 2, "text": "yes sounds good again"}]}
+    with pytest.raises(g.BatchFailed):
+        g.validate_messages(bad, 2, ["sounds good"])
+
+
+def test_mini_uses_at_least_six_distinct_topics():
+    assert len({b.topic for b in g.skeleton(CFG, mini=True).bursts}) >= 6
+
+
+def test_collect_api_error_stops_without_retry(tmp_path):
+    class Boom:
+        calls = 0
+
+        def __call__(self, s):
+            Boom.calls += 1
+            raise RuntimeError("400 invalid_request_error: example")
+
+    fills, failures = g.collect(g.batch_specs(g.skeleton(CFG, mini=True))[:1], Boom(), 1, lambda m: None)
+    assert fills == {} and Boom.calls == 1 and failures[0].startswith("API ERROR RuntimeError")
+
+
+def test_repetition_check_excludes_planted_and_counts():
+    import repetition_check as rc
+
+    sep = " "
+    L = lambda m, s, t: f"1/{m}/26, 9:0{m}{sep}AM - {s}: {t}"
+    text = "\n".join([L(1, "Sam", "see you at the station soon"), L(2, "Sam", "see you at the station soon"), L(3, "Alex", "see you at the station soon"),
+                      L(4, "Alex", "see you at the station soon"), L(5, "Alex", "planted joke text goes here"), L(6, "Sam", "<Media omitted>")]) + "\n"
+    res = rc.analyse(text)
+    assert res["repeated_over_3"] == 1 and res["top_3grams"][0][0] == "see you at"
+    gt = {"items": [{"timestamp": "2026-01-05T09:05:00", "text": "planted joke text goes here"}]}
+    import json as _j, tempfile, pathlib
+
+    f = pathlib.Path(tempfile.mkdtemp()) / "gt.json"
+    f.write_text(_j.dumps(gt))
+    assert rc.analyse(text, str(f))["messages_checked"] == 4

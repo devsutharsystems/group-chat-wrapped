@@ -80,3 +80,10 @@ Conclusion: the schema adds a fixed overhead (279 tokens for the generator schem
 - The 12 failed calls cost about $0.017 (ledger $0.0226 after spike, mini run and calibration).
 - Fix to test (UNVERIFIED by execution): `thinking={"type": "disabled"}`, documented as allowed at effort `high` or below (row 9). Added as `thinking` in `synthetic/config.json`; the retry rule stays (one retry, then fail).
 - Real filler is about 50.7 tokens per rendered chat line (120 chars, from the 30-line sample); the original config would have produced about 430K tokens, so burst probabilities were cut to 0.30 weekday / 0.45 weekend (about 5.1K messages, 128 batches, roughly 216K to 261K tokens).
+
+## MINI RUN 2 (OBSERVED 2026-11-06): thinking disabled + style cards + banned phrases
+
+- `thinking={"type": "disabled"}` with effort `low` and the JSON schema was accepted by the API: 7 of 7 batches succeeded, 0 failed, every call `stop_reason: end_turn`, `thinking_tokens` 0. This verifies row 9's "disabled allowed at effort high or below" for Haiku 5.5 by execution.
+- Output about 37 tokens per message (1,191 to 2,057 output tokens per batch of 30 to 50), latency 7.4 to 14.9 s per call, cost about $0.0065 for the run. Ledger total after this run: $0.02901.
+- Repetition check (`scripts/repetition_check.py`, 283 messages): 0 distinct messages of 4+ words repeated more than 3 times. Top 3-grams: "so we can" 6, "and we can" 6, "honestly i think" 5 (a style-card word, "honestly", becomes a mild tic for one member).
+- Exact full-run estimate (count_tokens WITH output_config, 128 prompts): 200,328 input tokens total, at most 1,887 per call, far below the 100K repricing line.

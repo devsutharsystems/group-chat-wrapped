@@ -117,7 +117,7 @@ def call_json(
         raise
     latency = time.perf_counter() - t0
     usage = _usage_dict(getattr(resp, "usage", None))
-    c = guard.record(label, usage, MODEL, reserved=reserved, extra={"stop_reason": getattr(resp, "stop_reason", None)})
+    c = guard.record(label, usage, MODEL, reserved=reserved, extra={"stop_reason": getattr(resp, "stop_reason", None), "thinking_tokens": (usage.get("output_tokens_details") or {}).get("thinking_tokens")})
     text = "".join(getattr(b, "text", "") for b in getattr(resp, "content", []) if getattr(b, "type", "") == "text")
     stop = getattr(resp, "stop_reason", None)
     parsed, ok, note = None, True, ""
