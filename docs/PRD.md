@@ -93,3 +93,10 @@ VERIFIED from a real Android export (fixture `tests/fixtures/android_us_12h.txt`
 - URLs keep query strings; the privacy layer replaces the whole URL.
 - ❤️ and ☀️ carry U+FE0F: count emoji per emoji. Expected: the emoji line = 8; `hahaha 😂😂😂` = 3 emojis, 1 laugh message.
 - UNVERIFIED (no real sample): multi-line messages, 24-hour clock, iOS, dd/mm, non-English, others' deletions, colon inside message text. Generate plain-space and dd/mm variants in tests.
+
+### Parser behaviour (Phase 1b, `src/gcw/parser.py`)
+
+- Date order: (1) a component > 12 decides; (2) else the order whose timestamps are non-decreasing across the file; (3) else `ambiguous=True`, assume m/d for 12h AM/PM headers and d/m otherwise, with a warning. `date_order="mdy"|"dmy"` overrides. Two-digit years become 20YY.
+- Formats: `android_12h` is VERIFIED. `android_24h`, `ios` (12h and 24h), multi-line continuation, other separators than `/`, and non-English AM/PM are UNVERIFIED or unsupported; the report carries `format_verified` and a warning.
+- System lines are matched with anchored, configurable patterns BEFORE splitting `Sender: text` (the name part cannot contain a colon, so `Sam: I changed my mind` is a message). Deleted and media patterns are configurable; "This message was deleted" (others' deletions) is UNVERIFIED.
+- Lines are split on `\r\n`, `\n`, `\r` only (not U+2028/U+0085). The DataFrame keeps raw text; `textnorm.normalise_for_match` is for matching only and strips U+200D.
