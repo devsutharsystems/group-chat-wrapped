@@ -40,8 +40,8 @@ Date filter: messages in the last 365 days before the chat's latest message (con
 - **Longest silence:** the maximum gap between two consecutive messages in the filtered chat (reported with both timestamps).
 - **Conversation starter:** a message sent after a gap of >=6 hours since the previous message. Count per sender.
 - **Response time:** for each message from sender B immediately following a message from a different sender A, the delay is `t(B) - t(A)`, counted only if <=1 hour. Per sender: median of their delays.
-- **Laughs:** messages matching `\b(ha){2,}\b|lol|lmao|rofl|😂|🤣` (case-insensitive); count per sender.
-- **Emojis:** one per grapheme cluster (UAX #29 `\X` via the `regex` module), so a heart with U+FE0F, a ZWJ family and a skin-toned thumb each count 1. A cluster is an emoji if it contains an Extended_Pictographic character (bare symbols without U+FE0F count; (c), (r), TM style symbols also count), or is a flag pair or a keycap. Per sender, total, and top 10 overall (variants with and without U+FE0F merge). Ties: higher count, then first appearance. (Phase 2a replaced the earlier codepoint-range rule and top 5.)
+- **Laughs:** messages matching `\b(ha){2,}\b|\b(?:lol+|lmao+|rofl+(?:mao+)?)\b|😂|🤣` (case-insensitive); count per sender. Changed in Phase 2a-fix: `lol`, `lmao` and `rofl` must now be whole words (stretched forms such as lolll, lmaooo and roflmao still count), so words like lollipop no longer count; the haha pattern and the two laughing emoji are unchanged.
+- **Emojis:** one per grapheme cluster (UAX #29 `\X` via the `regex` module), so a heart with U+FE0F, a ZWJ family and a skin-toned thumb each count 1. A cluster is an emoji if it contains an Extended_Pictographic character (bare text-style symbols such as a heart or sun without U+FE0F count; (c), (r) and TM count only when followed by U+FE0F), or is a flag pair or a keycap. Per sender, total, and top 10 overall (variants with and without U+FE0F merge). Ties: higher count, then first appearance. (Phase 2a replaced the earlier codepoint-range rule and top 5.)
 - **Media:** messages that are only a media placeholder (`<Media omitted>`, `image omitted`, etc.), per sender.
 - **Links:** count of `https?://` URLs per sender.
 
@@ -108,4 +108,4 @@ VERIFIED from a real Android export (fixture `tests/fixtures/android_us_12h.txt`
 - Starters: the first message of the window is not a starter (no previous message); a gap of exactly 6h counts. Response time: only the immediately previous message counts; a delay of 0 and of exactly 1h count; the median of an even count is the mean of the two middle values.
 - Ties: top talkers and night/early winners go to the higher count, then A-Z; busiest hour/weekday/date and longest silence go to the earlier one.
 - Night owl / early bird: per sender `night_share`, `early_share`, `qualifies` (>= 30 messages) and `leaning` (night, early or tie); overall winners among qualifying senders only.
-- Laughs use the regex above verbatim, so `lol|lmao|rofl` also match inside longer words (known weakness). Links count `https?://` occurrences.
+- Laughs use the regex above (whole-word `lol`/`lmao`/`rofl` since Phase 2a-fix). Links count `https?://` occurrences.

@@ -27,7 +27,7 @@ WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", 
 TOP_EMOJIS = 10
 VS16 = chr(0xFE0F)  # variation selector-16 (emoji presentation); never write it as a raw character in this file
 
-LAUGH = re.compile(r"\b(ha){2,}\b|lol|lmao|rofl|😂|🤣", re.IGNORECASE)  # PRD verbatim (substring match is PRD-literal)
+LAUGH = re.compile(r"\b(ha){2,}\b|\b(?:lol+|lmao+|rofl+(?:mao+)?)\b|😂|🤣", re.IGNORECASE)  # PRD: lol/lmao/rofl are whole words (stretched letters ok)
 URL = re.compile(r"https?://", re.IGNORECASE)
 
 _GRAPHEME = regex.compile(r"\X")
@@ -36,11 +36,19 @@ _FLAG = regex.compile(r"\p{Regional_Indicator}{2}")
 _KEYCAP = regex.compile(r"[0-9#*]\uFE0F?\u20E3")
 
 
+NEEDS_VS16 = frozenset(map(chr, (0xA9, 0xAE, 0x2122)))  # (c), (r), TM: count as emoji only with U+FE0F
+
+
 def emoji_clusters(text: str) -> list[str]:
     """One entry per emoji grapheme cluster: a cluster containing an Extended_Pictographic character
-    (so ❤️, a ZWJ family and a skin-toned thumb each count once), a flag, or a keycap.
-    Side effect (documented): (c), (r), TM style symbols also count."""
-    return [c for c in _GRAPHEME.findall(text) if _PICTO.search(c) or _FLAG.fullmatch(c) or _KEYCAP.fullmatch(c)]
+    (so a heart with U+FE0F, a ZWJ family and a skin-toned thumb each count once), a flag, or a keycap.
+    Bare text-style symbols such as a heart or sun without U+FE0F count; (c), (r) and TM count only with U+FE0F."""
+    out = []
+    for c in _GRAPHEME.findall(text):
+        core = c if VS16 in c else "".join(ch for ch in c if ch not in NEEDS_VS16)
+        if _PICTO.search(core) or _FLAG.fullmatch(c) or _KEYCAP.fullmatch(c):
+            out.append(c)
+    return out
 
 
 def _bound(x: Any, *, end: bool) -> pd.Timestamp | None:

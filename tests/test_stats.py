@@ -205,6 +205,8 @@ def test_bad_bound_type_raises():
     ("1️⃣", 1),  # keycap
     ("✔ and ☀", 2),  # bare text-style symbols count (decision)
     ("(c) 2026 #1 plain text, digits 123", 0),
+    ("\u00a9 2026", 0), ("\u00a9\ufe0f", 1), ("\u2122", 0), ("\u2122\ufe0f", 1), ("\u00ae", 0), ("\u00ae\ufe0f", 1),  # (c) (r) TM need U+FE0F
+    ("\u2764", 1), ("\u2600", 1),  # bare heart and sun still count
     ("a‍b", 0),
 ])
 def test_emoji_clusters(text, want):
@@ -218,8 +220,12 @@ def test_emoji_line_and_haha_line_through_compute_stats():
     assert s["emojis"]["total"] == 11 and s["laughs"]["total"] == 1  # 8 + 3 emojis; the second message is 1 laugh message
 
 
-@pytest.mark.parametrize("text, laugh", [("hahaha", True), ("haha ok", True), ("HAHA", True), ("ha", False), ("hahah", False), ("lol", True), ("LMAO", True),
-                                         ("rofl", True), ("lmaooo", True), (LAUGH_FACE, True), ("\U0001F923", True), ("nothing here", False)])
+@pytest.mark.parametrize("text, laugh", [
+    ("hahaha", True), ("haha ok", True), ("HAHA", True), ("ha", False), ("hahah", False),
+    ("lollipop", False), ("LOL!", True), ("lol", True), ("lmaooo", True), ("LMAO", True), ("rofl", True), ("pillow", False),
+    ("lolll", True), ("roflmao", True), ("mylol", False), ("lollapalooza", False), ("trolling", False), ("sol", False),
+    (LAUGH_FACE, True), ("\U0001F923", True), ("nothing here", False),
+])
 def test_laugh_regex(text, laugh):
     df = frame([(1, "03-02 10:00", "Sam", text, "")])
     assert compute_stats(df)["laughs"]["total"] == int(laugh)
@@ -337,7 +343,7 @@ def test_frozen_emoji_link_media_laugh_counts(frozen):
     assert [(e["emoji"].replace("️", ""), e["count"]) for e in s["emojis"]["top"]] == top
     assert s["links"]["total"] == len(re.findall(r"https?://", body)) == 2
     assert s["media"]["total"] == sum(r[2] == MEDIA for r in raw) == 136
-    laugh = re.compile(r"\b(ha){2,}\b|lol|lmao|rofl|\U0001F602|\U0001F923", re.I)
+    laugh = re.compile(r"\b(ha){2,}\b|\b(?:lol+|lmao+|rofl+(?:mao+)?)\b|\U0001F602|\U0001F923", re.I)
     for sender in s["senders"]:
         assert s["laughs"]["per_sender"][sender] == sum(bool(laugh.search(r[2])) for r in raw if r[1] == sender and r[2] != MEDIA)
         assert s["media"]["per_sender"][sender] == sum(r[2] == MEDIA for r in raw if r[1] == sender)
