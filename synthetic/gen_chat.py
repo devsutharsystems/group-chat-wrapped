@@ -339,7 +339,7 @@ class ApiFiller:
     def key(self, spec: BatchSpec) -> str:
         from gcw import llm
 
-        p = llm.request_params(spec.prompt(), SCHEMA, max_tokens_for(self.cfg, spec.n, self.thinking), "low")
+        p = llm.request_params(spec.prompt(), SCHEMA, max_tokens_for(self.cfg, spec.n, self.thinking), "low", None, self.cfg.get("thinking"))
         return hashlib.sha256(json.dumps(p, sort_keys=True).encode()).hexdigest()[:32]
 
     def __call__(self, spec: BatchSpec) -> list[str]:
@@ -352,7 +352,7 @@ class ApiFiller:
         mt = max_tokens_for(self.cfg, spec.n, self.thinking)
         last = ""
         for attempt in (1, 2):
-            res = llm.call_json(spec.prompt(), SCHEMA, max_tokens=mt, confirm=self.confirm, guard=self.guard, label=spec.label, client=self.client)
+            res = llm.call_json(spec.prompt(), SCHEMA, max_tokens=mt, confirm=self.confirm, guard=self.guard, label=spec.label, thinking=self.cfg.get("thinking"), client=self.client)
             th = (res.usage.get("output_tokens_details") or {}).get("thinking_tokens")
             try:
                 if not res.ok:

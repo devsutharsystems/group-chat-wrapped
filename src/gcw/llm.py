@@ -69,7 +69,7 @@ def rough_prompt_tokens(prompt: str) -> int:
     return int(len(prompt) / 2.5) + 50
 
 
-def request_params(prompt: str, schema: dict, max_tokens: int, effort: str, system: str | None = None) -> dict:
+def request_params(prompt: str, schema: dict, max_tokens: int, effort: str, system: str | None = None, thinking: dict | None = None) -> dict:
     p: dict[str, Any] = {
         "model": MODEL,
         "max_tokens": max_tokens,
@@ -78,14 +78,18 @@ def request_params(prompt: str, schema: dict, max_tokens: int, effort: str, syst
     }
     if system:
         p["system"] = system
+    if thinking is not None:  # e.g. {"type": "disabled"}: allowed at effort high or below (api-notes row 9)
+        p["thinking"] = thinking
     return p
 
 
-def count_tokens(prompt: str, *, client: Any, system: str | None = None) -> int:
-    """Free endpoint (api-notes row 13). output_config is not passed (not documented for count_tokens)."""
+def count_tokens(prompt: str, *, client: Any, system: str | None = None, schema: dict | None = None, effort: str = "low") -> int:
+    """Free endpoint (api-notes row 13). Pass `schema` to include output_config (effort + json_schema) like the real request."""
     kw: dict[str, Any] = {"model": MODEL, "messages": [{"role": "user", "content": prompt}]}
     if system:
         kw["system"] = system
+    if schema is not None:
+        kw["output_config"] = {"effort": effort, "format": {"type": "json_schema", "schema": schema}}
     return int(client.messages.count_tokens(**kw).input_tokens)
 
 
@@ -99,6 +103,7 @@ def call_json(
     label: str,
     effort: str = "low",
     system: str | None = None,
+    thinking: dict | None = None,
     client: Any = None,
 ) -> LLMResult:
     est = cost.estimate_usd(rough_prompt_tokens(prompt) + (rough_prompt_tokens(system) if system else 0), max_tokens)
@@ -106,7 +111,7 @@ def call_json(
     client = client or get_client()
     t0 = time.perf_counter()
     try:
-        resp = client.messages.create(**request_params(prompt, schema, max_tokens, effort, system))
+        resp = client.messages.create(**request_params(prompt, schema, max_tokens, effort, system, thinking))
     except Exception:
         guard.release(reserved)
         raise

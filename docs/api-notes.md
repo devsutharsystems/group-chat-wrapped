@@ -60,3 +60,23 @@ Result:
 - Cost from usage: 805 x $0.10 + 458 x $0.50 per MTok = **$0.0003095** (ledger total after spike: $0.0003095).
 - count_tokens: estimate **445** vs actual `input_tokens` **805**, a **-44.7%** undercount (actual is 1.81x the estimate). Hypothesis (UNVERIFIED): count_tokens was called without `output_config`, and the JSON schema adds roughly 360 input tokens to a real request. Consequence: add the schema's cost to count_tokens-based input estimates, or measure real `input_tokens` on the mini run. Cost impact is small (about $0.00004 per call at the input rate).
 - The local pre-call estimate was 467 prompt tokens (chars/2.5 heuristic), also well under the 805 actual.
+
+## CALIBRATION: count_tokens vs real input_tokens (OBSERVED 2026-11-06)
+
+The SDK's `count_tokens` accepts `output_config`. Counting WITH the same `output_config` (effort + json_schema) matches the real `input_tokens` exactly (gap 0) at three sizes. Counting WITHOUT it undercounts by a roughly constant amount per schema, not a percentage:
+
+| point | real input_tokens | count_tokens without output_config | with output_config |
+|---|---|---|---|
+| spike (spike schema) | 805 | 445 (gap 360) | 805 (gap 0) |
+| one mini call (generator schema) | 1,053 | 774 (gap 279) | 1,053 (gap 0) |
+| ~50K-token call (generator schema, real call, max_tokens 200) | 50,383 | 50,104 (gap 279) | 50,383 (gap 0) |
+
+Conclusion: the schema adds a fixed overhead (279 tokens for the generator schema, 360 for the spike schema); it does not scale with prompt size. The two generator-schema points (1,053 and 50,383 tokens) have the identical 279 gap. So `count_tokens(..., output_config=...)` is an exact pre-flight check for the 100K repricing line; without `output_config` add the per-schema constant. The big call stopped at `max_tokens` (200) with `thinking_tokens` 200: adaptive thinking used the whole budget on a trivial task. Cost $0.0051.
+
+## MINI RUN findings (OBSERVED; 7 batches)
+
+- 1 of 7 batches succeeded (30 messages: in 1,053, out 1,270 tokens, `thinking_tokens` 0, 8.4 s, $0.00074; about 42 output tokens per message).
+- 6 of 7 failed twice with `stop_reason: max_tokens` where `output_tokens` == `thinking_tokens` == the cap (2,085 to 2,850): adaptive thinking at effort `low` consumed the entire budget and produced no JSON. The spike's `thinking_tokens: 0` did not predict this; thinking varies by task.
+- The 12 failed calls cost about $0.017 (ledger $0.0226 after spike, mini run and calibration).
+- Fix to test (UNVERIFIED by execution): `thinking={"type": "disabled"}`, documented as allowed at effort `high` or below (row 9). Added as `thinking` in `synthetic/config.json`; the retry rule stays (one retry, then fail).
+- Real filler is about 50.7 tokens per rendered chat line (120 chars, from the 30-line sample); the original config would have produced about 430K tokens, so burst probabilities were cut to 0.30 weekday / 0.45 weekend (about 5.1K messages, 128 batches, roughly 216K to 261K tokens).
