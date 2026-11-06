@@ -16,3 +16,4 @@
 - Only synthetic names (see `tests/fixtures/ALLOWED_NAMES.txt`) appear in the repo. Run `scripts/scan_repo.py` and `pytest` before each commit.
 - Commits end with the Co-Authored-By line from the session attribution.
 - Spec is Prateek's, truncated at "…": build to R1–R7 in `docs/PRD.md`.
+- Commit only with `&&` after `pytest` and `scripts/scan_repo.py` both pass (e.g. `pytest && scripts/scan_repo.py && git commit ...`); never chain with `;`.

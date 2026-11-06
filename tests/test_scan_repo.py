@@ -73,3 +73,17 @@ def test_skips_venv_and_env_file(tmp_path):
 
 def test_iso_date_not_phone(tmp_path):
     assert scan(make(tmp_path, {"a.md": "verified 2026" + "-11-06 ok"})) == []
+
+
+@pytest.mark.parametrize("parts", [
+    ("+91 98765", " 43210"),
+    ("98765", "-43210"),
+    ("(079) 2345", " 6789"),
+    ("98765", "43210"),
+])
+def test_indian_phone_formats_flagged(tmp_path, parts):
+    assert scan(make(tmp_path, {"a.md": "call " + "".join(parts) + " now"}))
+
+
+def test_iso_date_2026_11_05_not_flagged(tmp_path):
+    assert scan(make(tmp_path, {"a.md": "2026" + "-11-05"})) == []

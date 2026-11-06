@@ -78,3 +78,17 @@ All evaluation uses synthetic chats only. A real chat is never used for evaluati
 
 - Carousel output.
 - Hosted upload endpoint.
+
+## 8. Parser format facts
+
+VERIFIED from a real Android export (fixture `tests/fixtures/android_us_12h.txt`, names replaced) unless marked UNVERIFIED.
+
+- Line format: `M/D/YY, h:mm<U+202F>AM|PM - Sender: text`. U+202F on all 14 lines; no BOM; LF endings. Parser accepts U+202F and a plain space.
+- Date order is m/d in this file (export dated 5 Nov 2026 shows `11/5/26`). Infer order from the whole file, support a `--date-order` override, report the assumption, and flag single-day files as ambiguous.
+- System lines have no `Sender:` prefix (encryption notice, created group, added, removed): excluded from stats.
+- Own deletion = sender line with text `You deleted this message`: flag deleted, exclude from stats and AI. Deletions by others: UNVERIFIED; keep the pattern list configurable.
+- Trailing ` <This message was edited>`: strip, flag edited.
+- `<Media omitted>` = media, not words.
+- URLs keep query strings; the privacy layer replaces the whole URL.
+- ❤️ and ☀️ carry U+FE0F: count emoji per emoji. Expected: the emoji line = 8; `hahaha 😂😂😂` = 3 emojis, 1 laugh message.
+- UNVERIFIED (no real sample): multi-line messages, 24-hour clock, iOS, dd/mm, non-English, others' deletions, colon inside message text. Generate plain-space and dd/mm variants in tests.
