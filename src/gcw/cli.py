@@ -24,11 +24,57 @@ def build_parser() -> argparse.ArgumentParser:
     sc.add_argument("--until", help="last day/time to include, inclusive (YYYY-MM-DD means the whole day)")
     sc.add_argument("--date-order", choices=["mdy", "dmy"], help="override the inferred day/month order")
     sc.add_argument("--html", help="also write the card HTML here (debugging)")
+    pv = sub.add_parser("preview", help="show the exact (pseudonymised, redacted) text that would be sent to the model; makes no API call")
+    pv.add_argument("chat", help="WhatsApp export (.txt)")
+    pv.add_argument("--aliases", help="aliases JSON ({\"members\": [...]} or flat); without it only senders are pseudonymised")
+    pv.add_argument("--out", default="out/payload_preview.txt", help="where to write the full payload (default out/payload_preview.txt; gitignored)")
+    pv.add_argument("--date-order", choices=["mdy", "dmy"], help="override the inferred day/month order")
     return ap
+
+
+def preview(args: argparse.Namespace) -> int:
+    import json
+    import random
+
+    from gcw import privacy
+
+    chat = Path(args.chat)
+    if not chat.is_file():
+        print(f"gcw: chat file not found: {chat}", file=sys.stderr)
+        return 2
+    aliases = None
+    if args.aliases:
+        try:
+            aliases = privacy.load_aliases(args.aliases)
+        except (OSError, ValueError) as e:
+            print(f"gcw: bad aliases file: {e}", file=sys.stderr)
+            return 2
+    else:
+        print("gcw: warning: no --aliases file: names inside message text are not replaced (only senders are)", file=sys.stderr)
+    df, report = parse_chat(chat, date_order=args.date_order)
+    if report.n_messages == 0:
+        print("gcw: no messages could be parsed from this file", file=sys.stderr)
+        return 3
+    try:
+        text, counts, _mapping = privacy.build_payload(df, aliases)  # the mapping is deliberately not printed or written
+    except (OSError, ValueError) as e:
+        print(f"gcw: {e}", file=sys.stderr)
+        return 2
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text, encoding="utf-8")
+    print(json.dumps(counts, indent=2, ensure_ascii=False))
+    lines = text.splitlines()
+    print(f"\n20 random payload lines (seed 0) of {len(lines)}; full payload written to {out}:")
+    for i in sorted(random.Random(0).sample(range(len(lines)), min(20, len(lines)))):
+        print(lines[i])
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.cmd == "preview":
+        return preview(args)
     chat = Path(args.chat)
     if not chat.is_file():
         print(f"gcw: chat file not found: {chat}", file=sys.stderr)

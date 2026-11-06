@@ -27,3 +27,7 @@ Copy `aliases.example.json` to `aliases.json` (gitignored) to show display names
 - Demo PNGs are rendered locally and committed. CI does not render cards.
 - Chat timestamps have minute resolution, so response-time medians are coarse (see `docs/stats-verification.md`).
 - 24h Android, iOS and multi-line formats are not yet checked against real exports (`docs/PRD.md` section 8).
+
+## Privacy
+
+`python -m gcw preview CHAT --aliases aliases.json` shows the exact text that would be sent to the model (names replaced by `Member N`, links, emails, phones and long numbers redacted, sensitive-keyword messages withheld). Copy `aliases.example.json` to `aliases.json` (gitignored) and list your members and nicknames. **Pseudonymised text is sent to Anthropic in AI mode**; nicknames missing from the alias file and topics outside the English keyword list can leak. See `docs/privacy.md`.

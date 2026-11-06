@@ -19,3 +19,4 @@ notes/
 data/synthetic/
 aliases.json
 *.egg-info/
+build/

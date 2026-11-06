@@ -49,7 +49,7 @@ Date filter: messages in the last 365 days before the chat's latest message (con
 
 ## 4. AI contract
 
-- Each message is sent as `m000001 | <sender alias> | <date> | <pseudonymised text>`. IDs are stable and sequential across the filtered chat.
+- Each message is sent as `<id> | <YYYY-MM-DD HH:MM> | Member 3 | <pseudonymised, redacted text>` (id like m000123) (changed in Phase 3a: id, time, sender token, text). IDs are stable and sequential across the filtered chat; media is `[media]`; a message that hits the sensitive screen is `[withheld: sensitive]` with no content.
 - Response (JSON schema via `output_config.format`): `{title, summary, evidence: [{message_id, quote}]}` per item.
 - **Verification** (in code, `verify.py`): an evidence item passes only if (1) the ID exists, (2) the sender matches the claimed sender, and (3) the quote, after NFC normalisation, whitespace collapse and invisible-character stripping, is a substring of that message's pseudonymised text normalised the same way.
 - **Running jokes** need >=3 evidence messages on >=2 distinct dates after verification. Items failing this are dropped.
@@ -60,7 +60,7 @@ Date filter: messages in the last 365 days before the chat's latest message (con
 
 ## 5. Privacy contract
 
-- **Replaced before sending:** sender names via the alias file, known nicknames listed in the alias file, phone numbers, emails, URLs.
+- **Replaced before sending** (Phase 3a, `src/gcw/privacy.py`, details in `docs/privacy.md`): sender names and in-text mentions of alias-file names and nicknames (token `Member N`), URLs (whole URL), emails, phone numbers, UPI-style ids and @handles, digit runs of 6+ that are not dates or times. Messages matching `config/sensitive_keywords.json` are withheld entirely.
 - **Known limit:** nicknames *not* in the alias file, and names inside free text, may leak.
 - **Pseudonymised text IS sent to Anthropic.** The README says so plainly.
 - **Stats-only mode** makes zero API calls (test: patch the client, assert not called).

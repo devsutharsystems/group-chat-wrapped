@@ -1,0 +1,13 @@
+{
+  "note": "English only. Matching is case-insensitive and whole-word; a trailing * means 'a word that starts with this'. A match withholds the whole message from the AI payload. Over-withholding is the safe direction.",
+  "categories": {
+    "health": ["doctor", "doctors", "hospital", "clinic", "surgery", "surgeon", "medication", "medicine*", "prescription", "diagnos*", "symptom*", "blood pressure", "diabet*", "cancer", "therap*", "anxiety", "depress*", "panic attack", "migraine", "covid", "vaccin*", "pregnan*", "injur*", "sick", "ill", "illness", "disease", "dentist", "mental health", "antibiotic*"],
+    "money": ["loan", "loans", "debt", "owe", "owed", "mortgage", "salary", "paycheck", "rent", "tax", "taxes", "bankrupt*", "broke", "savings", "credit card", "interest rate", "emi", "invest*", "stocks", "crypto", "paying off"],
+    "religion": ["pray", "prayer*", "church", "temple", "mosque", "synagogue", "god", "allah", "jesus", "bible", "quran", "koran", "gita", "faith", "religio*", "atheis*", "worship", "fasting", "ramadan", "diwali", "easter"],
+    "politics": ["vote", "voting", "voted", "election*", "party", "opposition", "politic*", "government", "democrat*", "republican*", "bjp", "congress", "parliament", "protest*", "president", "minister", "campaign"],
+    "relationships": ["boyfriend", "girlfriend", "husband", "wife", "partner", "divorce*", "breakup", "break up", "dating", "crush", "affair", "cheating", "engaged", "engagement", "wedding", "marriage", "married", "ex"],
+    "sexuality": ["gay", "lesbian", "bisexual", "queer", "trans", "transgender", "sexual*", "coming out"],
+    "legal": ["lawyer", "attorney", "lawsuit", "sue", "sued", "court", "arrest*", "police", "jail", "prison", "fine", "custody"],
+    "death_selfharm": ["died", "death", "dead", "funeral", "grief", "grieving", "suicid*", "self harm", "self-harm", "kill myself", "passed away"]
+  }
+}

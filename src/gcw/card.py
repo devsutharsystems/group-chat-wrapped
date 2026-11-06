@@ -68,10 +68,10 @@ def fmt_response(seconds: float) -> str:
 
 
 def load_aliases(path: str | Path) -> dict[str, str]:
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
-    if not isinstance(data, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in data.items()):
-        raise ValueError("aliases file must be a JSON object mapping export names to display names (strings)")
-    return data
+    """{export name: display name} from either aliases form (flat, or {"members": [...]}); see gcw.privacy.parse_aliases."""
+    from gcw.privacy import load_aliases as _load
+
+    return _load(path).display_map()
 
 
 def fastest_responder(stats: dict, min_samples: int = MIN_RESPONSE_SAMPLES, min_gap: float = MIN_RESPONSE_GAP_S) -> dict | None:

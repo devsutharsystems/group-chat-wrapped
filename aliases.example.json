@@ -1,4 +1,10 @@
 {
-  "Sam": "Sam (display name used on the card only)",
-  "Alex": "Alex"
+  "members": [
+    {"export_name": "Sam", "display": "Sam", "nicknames": ["Sammy"], "case_sensitive": false},
+    {"export_name": "Alex", "display": "Alex", "nicknames": [], "case_sensitive": false},
+    {"export_name": "Maya", "display": "Maya", "nicknames": ["Mayz"], "case_sensitive": false},
+    {"export_name": "Jordan", "display": "Jordan", "nicknames": [], "case_sensitive": false},
+    {"export_name": "Riley", "display": "Riley", "nicknames": [], "case_sensitive": false},
+    {"export_name": "Kai", "display": "Kai", "nicknames": [], "case_sensitive": false}
+  ]
 }
