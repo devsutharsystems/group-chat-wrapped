@@ -13,6 +13,7 @@ import pandas as pd
 import pytest
 from PIL import Image
 
+import conftest
 from gcw import card
 from gcw.dataset import verify_dataset
 from gcw.parser import parse_chat
@@ -24,21 +25,12 @@ FROZEN_PATH = ROOT / "synthetic" / "frozen" / "chat_synthetic.txt"
 
 
 # ---------------------------------------------------------------- helpers
-BROWSER_CREATED = False  # set when the lazily created session browser comes into existence
-
-
-@pytest.fixture(scope="session")
-def browser():
-    """ONE Chromium for the whole test session (--disable-gpu); closed at the end."""
-    global BROWSER_CREATED
-    with card.chromium() as b:
-        BROWSER_CREATED = True
-        yield b
+# the session `browser` fixture and its BROWSER_CREATED flag live in tests/conftest.py (shared with tests/test_card_ai.py)
 
 
 def assert_no_session_browser() -> None:
     """The subprocess render tests start their own Chromium, so they must run BEFORE the session browser exists."""
-    assert not BROWSER_CREATED, ("one-browser rule broken: the session browser already exists, so a second Chromium would start. "
+    assert not conftest.BROWSER_CREATED, ("one-browser rule broken: the session browser already exists, so a second Chromium would start. "
                                  "Keep the subprocess render tests above every test that uses the `browser` fixture (or run them alone).")
 
 
@@ -157,7 +149,7 @@ def test_cli_rejects_missing_file_and_bad_aliases(tmp_path):
 
 def test_one_browser_guard_fires_when_a_session_browser_exists(monkeypatch):
     assert_no_session_browser()  # passes now: nothing has created the session browser yet in this ordering
-    monkeypatch.setattr(sys.modules[__name__], "BROWSER_CREATED", True)
+    monkeypatch.setattr(conftest, "BROWSER_CREATED", True)
     with pytest.raises(AssertionError, match="one-browser rule broken"):
         assert_no_session_browser()
 

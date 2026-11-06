@@ -24,8 +24,8 @@ PHASE_LABEL = "3b:"
 
 CONFIGS: dict[str, dict] = {
     "A": {"thinking": {"type": "disabled"}, "effort": "low"},  # the verified generator shape
-    "B": {"effort": "low"},  # adaptive thinking (the default when `thinking` is omitted)
-    "C": {"effort": "medium"},  # adaptive thinking, medium effort
+    "B": {"effort": "low"},  # `thinking` omitted (API default: adaptive); thinking_tokens was 0 in all nine slice runs, so B differs from A only by effort and the omitted parameter
+    "C": {"effort": "medium"},  # `thinking` omitted, effort medium (same remark as B)
 }
 
 

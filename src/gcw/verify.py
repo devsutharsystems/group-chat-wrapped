@@ -185,6 +185,16 @@ def match_planted(verified: dict, index: dict, truth_items: list[dict], mapping:
         res[typ] = {"planted_in_slice": planted, "found": sorted(found), "recall": (len(found) / len(planted)) if planted else None,
                     "found_strict": sorted(strict), "recall_strict": (len(strict) / len(planted)) if planted else None,
                     "items_matching_planted": matched_items, "items_unplanted": unplanted}
+    # secondary, moments only: an AI moment is "found by date" if any verified evidence message falls on the planted date.
+    # (A moment has ONE planted line, so strict equals lenient for moments by construction; the date rule is the looser secondary number.)
+    date_of = {it["id"]: it.get("date") or it["timestamp"][:10] for it in truth_items if it["kind"] == "moment"}
+    by_date: set[str] = set()
+    for item in verified.get("moments", []):
+        days = {index[e["message_id"]]["ts"].date().isoformat() for e in item["evidence"]}
+        by_date |= {t for t in res["moments"]["planted_in_slice"] if date_of.get(t) in days}
+    pl = res["moments"]["planted_in_slice"]
+    res["moments"]["found_by_date"] = sorted(by_date)
+    res["moments"]["recall_by_date"] = (len(by_date) / len(pl)) if pl else None
     return res
 
 

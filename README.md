@@ -39,3 +39,11 @@ Copy `aliases.example.json` to `aliases.json` (gitignored) to show display names
 **Saved responses.** `--save-response` (off by default) also writes the raw model response and the verified report into `out/runs/`. They contain pseudonymised quotes from your chat: a run on a real chat with the flag leaves them in the gitignored `out/runs/`, so delete them afterwards. Without the flag only a log (config, token counts, cost, verification counts, prompt hash) is written.
 
 **What was tested against prompt injection:** 7 attempts (the planted line from the chat plus three rewritten phrasings, configs A and B) on one synthetic chat, 0 obeyed. That is a probe, not a guarantee: this README does not claim the defence is robust, and real chats may contain phrasings that work. Every model claim is still checked in code against the exact messages, which limits what an injected instruction can put on the card.
+
+## The AI card (3c)
+
+1. Run `analyze ... --confirm --save-response` (the card needs the saved verified report).
+2. `python -m gcw review out/runs/<run>.json` lists the items with ids; approve with `--approve ID ...` or reject with `--reject ID ...`. Review files live in `out/reviews/` (gitignored). Pending and rejected items never render.
+3. `python -m gcw card CHAT --aliases aliases.json --report out/runs/<run>.json --review out/reviews/<run>.json --until YYYY-MM-DD --out out/card.png` renders Zone 1 (counted stats) plus Zone 2 (approved items, names shown instead of Member tokens). `--until` must equal the analysed slice's end. `--auto-approve-synthetic` exists only for the frozen synthetic chat and says so in the footer.
+
+Configs B and C leave the `thinking` parameter out (the API default is adaptive thinking), but the model used zero thinking tokens in every slice run, so they differ from A only through the effort setting; do not read them as "thinking enabled".

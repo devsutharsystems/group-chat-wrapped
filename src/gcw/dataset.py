@@ -42,3 +42,15 @@ def verify_dataset(directory: str | Path | None = None, *, chat_sha256: str = CH
     if problems:
         raise DatasetError("DATASET NOT FROZEN VERSION: " + "; ".join(problems))
     return {CHAT_FILE: chat_sha256, GROUND_TRUTH_FILE: ground_truth_sha256}
+
+
+def is_frozen_chat(path: str | Path) -> bool:
+    """True only for the frozen synthetic chat: the file's SHA-256 equals the hard-coded constant AND the frozen dataset verifies."""
+    p = Path(path)
+    try:
+        if not p.is_file() or sha256_file(p) != CHAT_SHA256:
+            return False
+        verify_dataset()
+    except (OSError, DatasetError):
+        return False
+    return True

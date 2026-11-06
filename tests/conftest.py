@@ -47,3 +47,17 @@ def _block_real_clients():
     mp.setattr(httpx.AsyncClient, "send", no_send)
     yield
     mp.undo()
+
+
+BROWSER_CREATED = False  # set when the lazily created session browser comes into existence (tests/test_card.py checks it)
+
+
+@pytest.fixture(scope="session")
+def browser():
+    """ONE Chromium for the whole test session (--disable-gpu), shared by every render test; closed at the end."""
+    global BROWSER_CREATED
+    from gcw import card
+
+    with card.chromium() as b:
+        BROWSER_CREATED = True
+        yield b

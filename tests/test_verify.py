@@ -196,7 +196,7 @@ def test_match_planted_found_unplanted_and_slice_rules():
     assert res["running_jokes"] == {"planted_in_slice": ["j1"], "found": ["j1"], "recall": 1.0, "found_strict": ["j1"], "recall_strict": 1.0,
                                     "items_matching_planted": 1, "items_unplanted": 0}
     assert res["moments"] == {"planted_in_slice": ["m1"], "found": ["m1"], "recall": 1.0, "found_strict": ["m1"], "recall_strict": 1.0,
-                              "items_matching_planted": 1, "items_unplanted": 1}
+                              "items_matching_planted": 1, "items_unplanted": 1, "found_by_date": ["m1"], "recall_by_date": 1.0}
     assert res["awards"]["recall"] is None and res["awards"]["planted_in_slice"] == []
 
 
@@ -252,3 +252,19 @@ def test_a_quote_with_an_angle_bracket_passes_verification_and_displays_as_the_o
     shown = card.display_text(out["moments"][0]["evidence"][0]["quote"])
     assert shown == "I &lt;3 pizza always" and html.unescape(shown) == "I <3 pizza always" and chr(0xFF1C) not in shown and "<" not in shown
     assert card.display_text(chr(0xFF1C) + "script>") == "&lt;script&gt;"  # still escaped: the mapping back never produces live markup
+
+
+def test_found_by_date_counts_any_verified_evidence_on_the_planted_date():
+    index, mapping, truth = planted_world()
+    bounds = dict(slice_start=pd.Timestamp("2026-03-01"), slice_end=pd.Timestamp("2026-03-31"))
+    # m1 is planted on 2026-03-04 here (truth has no 'date' key, so the timestamp's day is used). m000003 is another message on that day.
+    same_day = {"running_jokes": [], "awards": [], "moments": [joke(ev("m000003", "the stapler has opinions again"), title="x")]}
+    res = verify.match_planted(same_day, index, truth, mapping, **bounds)["moments"]
+    assert res["found"] == [] and res["found_strict"] == [] and res["found_by_date"] == ["m1"] and res["recall_by_date"] == 1.0
+    other_day = {"running_jokes": [], "awards": [], "moments": [joke(ev("m000006", "wow we should write a poem"), title="y")]}
+    res = verify.match_planted(other_day, index, truth, mapping, **bounds)["moments"]
+    assert res["found_by_date"] == [] and res["recall_by_date"] == 0.0
+    none = verify.match_planted({"running_jokes": [], "awards": [], "moments": []}, index, [t for t in truth if t["kind"] != "moment"], mapping, **bounds)["moments"]
+    assert none["recall_by_date"] is None and none["found_by_date"] == []
+    explicit = [{**t, "date": "2026-03-05"} if t["id"] == "m1" else t for t in truth]
+    assert verify.match_planted(other_day, index, explicit, mapping, **bounds)["moments"]["found_by_date"] == ["m1"]  # an explicit planted date wins
