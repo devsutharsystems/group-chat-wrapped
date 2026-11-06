@@ -224,3 +224,35 @@ def test_frozen_chat_counts():
     assert r.per_sender == {"Riley": 1316, "Kai": 1158, "Maya": 1010, "Sam": 899, "Jordan": 527, "Alex": 234}
     assert (r.date_order, r.ambiguous, r.format) == ("mdy", False, "android_12h")
     assert len(df) == 5153 and df["id"].is_unique
+
+
+def test_system_patterns_never_match_a_sender_line_even_when_the_text_fits_them():
+    # each text WOULD match a system pattern if the "Sam: " prefix were allowed inside the name part
+    lines = ["Sam: I changed the group description yesterday", "Sam: they changed their phone number", "Sam: Alex added the file",
+             "Sam: Kai left", "Sam: Kai joined", "Sam: Alex created group chat rules", "Sam: Kai was added"]
+    df, r = parse_chat(j(*[f"5/11/26, 9:19 PM - {x}" for x in lines]))
+    assert df["is_system"].tolist() == [False] * 7 and (r.n_messages, r.n_system) == (7, 0)
+    assert df["sender"].tolist() == ["Sam"] * 7
+
+
+def test_messages_and_message_timestamps_on_fixture():
+    from gcw.parser import messages
+
+    df, r = parse_chat(FIX)
+    # hand: first sender line is 9:19 PM (the four system lines are 9:18 PM), last line 9:21 PM, all on 2026-11-05
+    assert r.first_msg_ts == datetime(2026, 11, 5, 21, 19) and r.last_msg_ts == datetime(2026, 11, 5, 21, 21)
+    assert (r.first_ts, r.last_ts) == (datetime(2026, 11, 5, 21, 18), datetime(2026, 11, 5, 21, 21))  # unchanged: all rows
+    m = messages(df)
+    assert len(m) == 9  # 10 sender rows minus the 1 deleted
+    assert not m["is_system"].any() and not m["is_deleted"].any()
+    assert "You deleted this message" not in m["text"].tolist() and int(m["is_media"].sum()) == 1  # media stays
+    assert len(df) == 14  # the raw frame is untouched
+
+
+def test_messages_helper_on_empty_and_no_sender_rows():
+    from gcw.parser import messages
+
+    df, r = parse_chat("5/11/26, 9:18 PM - You created this group\n")
+    assert len(messages(df)) == 0 and r.first_msg_ts is None and r.last_msg_ts is None and r.first_ts is not None
+    df, r = parse_chat("nothing here")
+    assert len(messages(df)) == 0 and r.first_msg_ts is None

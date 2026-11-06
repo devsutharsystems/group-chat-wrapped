@@ -56,6 +56,8 @@ class ParseReport:
     n_unparsed: int = 0
     first_ts: pd.Timestamp | None = None  # over all rows, system lines included
     last_ts: pd.Timestamp | None = None
+    first_msg_ts: pd.Timestamp | None = None  # sender rows only (deleted and media included, system lines excluded)
+    last_msg_ts: pd.Timestamp | None = None
     date_order: str | None = None  # "mdy" or "dmy"
     ambiguous: bool = False
     per_sender: dict[str, int] = field(default_factory=dict)
@@ -243,4 +245,13 @@ def parse_chat(
     report.n_system = int(df["is_system"].sum())
     report.per_sender = dict(Counter(sender_rows["sender"]))
     report.first_ts, report.last_ts = df["ts"].min(), df["ts"].max()
+    if len(sender_rows):
+        report.first_msg_ts, report.last_msg_ts = sender_rows["ts"].min(), sender_rows["ts"].max()
     return df, report
+
+
+def messages(df: pd.DataFrame) -> pd.DataFrame:
+    """The rows stats and the AI layer may use: no system lines and no deleted messages.
+    (Media rows stay; callers that count words or send text drop them via is_media.)
+    Stats and the AI layer must read this, never the raw parse_chat DataFrame."""
+    return df[~df["is_system"] & ~df["is_deleted"]]
