@@ -34,3 +34,29 @@ Your Task F text was cut off after "whether structured outputs / JSON schema are
 - Use `output_config.format` JSON schema for the AI contract. The code-side verifier is still required, because a schema can't enforce that quotes are real.
 - **Cost note (rows 14, 15):** keep each request's total prompt (cached + uncached) under 100K tokens; crossing it reprices the whole request 5x on input and output, even on a cache hit.
 - **Fetch caveat:** pages were read by a fetch agent. Some very long pages (prompt-caching middle, batch-processing second half) came back partly as summaries; claims relying on those are marked above.
+
+## SPIKE (run 2026-11-06, 1 attempt, 1 billed call; OBSERVED)
+
+Script: `scripts/spike.py --confirm` (20 synthetic chat lines -> topic, line count, per-line sender and is_question). Key check printed `key loaded: yes, length 106` (key never printed).
+
+Exact working call (also `llm.request_params`; no `thinking`, no `temperature`):
+
+```python
+client.messages.create(
+    model="claude-haiku-5-5",
+    max_tokens=2000,
+    messages=[{"role": "user", "content": PROMPT}],
+    output_config={"effort": "low",
+                   "format": {"type": "json_schema", "schema": SCHEMA}},  # additionalProperties false on every object
+)
+client.messages.count_tokens(model="claude-haiku-5-5", messages=[{"role": "user", "content": PROMPT}])
+```
+
+Result:
+- `stop_reason`: `end_turn`. JSON parsed; `line_count` = 20. This resolves the "combined effort + schema call" as VERIFIED by execution (row 12).
+- Latency: 3.688 s.
+- Full usage block: `{"cache_creation": {"ephemeral_1h_input_tokens": 0, "ephemeral_5m_input_tokens": 0}, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0, "inference_geo": "global", "input_tokens": 805, "output_tokens": 458, "output_tokens_details": {"thinking_tokens": 0}, "server_tool_use": null, "service_tier": "standard", "speed": "standard"}`
+- `thinking_tokens` = 0 at effort `low` for this task (adaptive thinking skipped it). One sample only; a 40-message writing task may think more, so the generator keeps a 300-token thinking allowance in `max_tokens` until the mini run measures it.
+- Cost from usage: 805 x $0.10 + 458 x $0.50 per MTok = **$0.0003095** (ledger total after spike: $0.0003095).
+- count_tokens: estimate **445** vs actual `input_tokens` **805**, a **-44.7%** undercount (actual is 1.81x the estimate). Hypothesis (UNVERIFIED): count_tokens was called without `output_config`, and the JSON schema adds roughly 360 input tokens to a real request. Consequence: add the schema's cost to count_tokens-based input estimates, or measure real `input_tokens` on the mini run. Cost impact is small (about $0.00004 per call at the input rate).
+- The local pre-call estimate was 467 prompt tokens (chars/2.5 heuristic), also well under the 805 actual.

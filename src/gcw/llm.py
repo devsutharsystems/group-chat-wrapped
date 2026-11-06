@@ -38,6 +38,13 @@ def load_env() -> None:
     load_dotenv(ROOT / ".env", override=False)
 
 
+def key_status() -> tuple[bool, int]:
+    """(loaded?, length). Never returns or prints the key itself."""
+    load_env()
+    k = os.environ.get("ANTHROPIC_API_KEY", "")
+    return bool(k), len(k)
+
+
 def get_client() -> Any:
     load_env()
     if not os.environ.get("ANTHROPIC_API_KEY"):

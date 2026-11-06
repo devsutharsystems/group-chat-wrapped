@@ -78,6 +78,10 @@ def main() -> int:
         print(f"spike estimate (local, worst case, no API call): ${est:.5f}  [prompt ~{llm.rough_prompt_tokens(p)} tok, max_tokens {MAX_TOKENS}]")
         print(f"caps: run ${cost.per_run_cap():.2f}, project ${cost.project_cap():.2f}; ledger so far ${cost.ledger_total():.5f}")
         return 0
+    loaded, n = llm.key_status()
+    print(f"key loaded: {'yes' if loaded else 'no'}, length {n}")
+    if not loaded:
+        return 3
     client = llm.get_client()
     est_count = llm.count_tokens(p, client=client)
     res = llm.call_json(p, SCHEMA, max_tokens=MAX_TOKENS, confirm=True, guard=cost.CostGuard(), label="spike", client=client)
