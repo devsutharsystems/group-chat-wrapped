@@ -205,5 +205,6 @@ def test_apply_ignores_a_boolean_rank_even_in_a_hand_built_review():
     rep = _three_moments()
     rv = review.approve_all(rep)
     ids = {v["title"]: i for i, v in rv["items"].items()}
-    rv["items"][ids["Third"]]["rank"] = True  # True == 1 in Python; it must not be treated as rank 1 (that would put Third before Second)
+    review.set_rank(rv, ids["Second"], 2)  # ties with Third's default rank (its position, 2): model order puts Second first
+    rv["items"][ids["Third"]]["rank"] = True  # True == 1 in Python; treated as rank 1 it would jump ahead of Second
     assert [m["title"] for m in review.apply(rep, rv)["moments"]] == ["First", "Second", "Third"]
