@@ -11,7 +11,8 @@ Model: `claude-haiku-5-5` (1M context, 128K max output). See `docs/api-notes.md`
 | R1 | Top talkers | For a synthetic chat with known counts, per-sender message and word counts match expected values exactly; ranking is correct; ties are broken alphabetically. Runs with zero API calls. |
 | R2 | Running jokes | Each reported joke has >=3 evidence messages on >=2 distinct dates, 100% of kept evidence quotes verified (section 4), and unverified items are dropped and counted in the output. |
 | R3 | Moments of the year | 3–5 moments, each with title, summary and >=1 verified evidence message. Sensitive-topic items are dropped (section 4). |
-| R4 | Shareable card | A PNG of exactly 1080x1350 px, rendered via Playwright from HTML, containing top talkers, one joke and one moment. Test reads the PNG size and asserts it. |
+| R4a | Shareable card, stats-only mode | A PNG of exactly 1080x1350 px rendered via Playwright from self-contained HTML, containing the top talkers and the counted stats (Zone 1 "By the numbers") and an "AI sections off" Zone 2. Zero API calls (the stats path never imports anthropic). `tests/test_card.py::test_png_size` reads the PNG size. |
+| R4b | Shareable card, AI mode | Same card; Zone 2 "From the chat" additionally contains one verified joke and one verified moment (later phase). |
 | R5 | Single-pass long context | The whole date-filtered chat is sent in one request, up to the model limit (1M tokens). The README states only the size actually tested. |
 | R6 | Stack | Python >=3.11, pandas for stats, Haiku for text. `requirements.txt` is pinned. |
 | R7 | Cost | A run costs well under $1. Actual USD is computed from the API `usage` fields and written to the run report and the ledger. A guard refuses a call whose estimate exceeds `GCW_COST_CAP_USD` (default 1.00) or that would push the ledger over `GCW_PROJECT_CAP_USD` (default 3.00), or that lacks `confirm=True`. |
@@ -25,7 +26,8 @@ Cost reality check (VERIFIED prices in `docs/api-notes.md`): above 100K prompt t
 | R1 | `stats.py`, `parser.py` | `tests/test_stats.py::test_top_talkers` | pytest output on `tests/fixtures` |
 | R2 | `llm.py`, `verify.py` | `tests/test_verify.py::test_running_joke_rules` | verified-quote report |
 | R3 | `llm.py`, `verify.py`, `privacy.py` | `tests/test_verify.py`, `tests/test_sensitive.py` | dropped-item counts |
-| R4 | `card.py` | `tests/test_card.py::test_png_size` | `out/card.png` (gitignored) |
+| R4a | `card.py`, `cli.py`, `stats.py` | `tests/test_card.py::test_png_size` | `out/card_stats.png` (gitignored) |
+| R4b | `card.py`, `llm.py`, `verify.py` | (later phase) | `out/card.png` (gitignored) |
 | R5 | `llm.py` | `tests/test_llm.py::test_single_request` (mocked client) | README "tested size" line |
 | R6 | whole repo | `tests/test_smoke.py` | `requirements.txt` |
 | R7 | `cost.py`, `llm.py` | `tests/test_cost.py` (guard, caps, confirm) | run report USD from `usage` |
@@ -109,3 +111,11 @@ VERIFIED from a real Android export (fixture `tests/fixtures/android_us_12h.txt`
 - Ties: top talkers and night/early winners go to the higher count, then A-Z; busiest hour/weekday/date and longest silence go to the earlier one.
 - Night owl / early bird: per sender `night_share`, `early_share`, `qualifies` (>= 30 messages) and `leaning` (night, early or tie); overall winners among qualifying senders only.
 - Laughs use the regex above (whole-word `lol`/`lmao`/`rofl` since Phase 2a-fix). Links count `https?://` occurrences.
+
+### Card behaviour (Phase 2b, `src/gcw/card.py`, `src/gcw/cli.py`)
+
+- Command: `python -m gcw stats-card CHAT --out out/card.png [--aliases aliases.json] [--since D] [--until D] [--date-order mdy|dmy] [--html PATH]` (with `PYTHONPATH=src` until the package is installed).
+- Zone 1 "By the numbers": most messages, most words, top-5 leaderboard (+N more), night owl, early bird, longest silence (days, hours, minutes), busiest day, top conversation starter (ties go to the earlier name and are shown), fastest responder, emoji, laughs, media and links. Zone 2 "From the chat" is reserved for the AI sections. Footer: "Counted locally. No AI used."
+- Fastest responder needs at least 20 response samples, otherwise "n/a (too few replies)". Timestamps have minute resolution, so medians under a minute are shown as "under 1 min".
+- Self-contained HTML (inline CSS, system fonts, CSP meta). The renderer runs the page offline and aborts every request. All chat-derived text is HTML-escaped; names are limited to 30 characters (bidi controls removed). `aliases.json` maps export names to display names for the card only (`aliases.example.json` is committed, `aliases.json` is gitignored).
+- Render resource rules: one Chromium, `--disable-gpu`, one page, device scale factor 1, closed after use; run under `nice -n 10`.

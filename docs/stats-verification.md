@@ -35,3 +35,9 @@ Starters (gap >= 6h, first message excluded):
 Response times (previous message is from a different sender, delay <= 1h): Maya's four delays are row 4 (08:25, after Alex 08:20) = 300 s; row 7 (10:00, after Alex 09:30) = 1800 s; row 10 (23:50, after Alex 23:30) = 1200 s; row 12 (02:30, after Sam 02:00) = 1800 s. Sorted: 300, 1200, 1800, 1800; even count, so the median is (1200 + 1800) / 2 = 1500 s.
 
 Silence: the gaps between consecutive kept messages are 20m, 5m, 0, 65m, 30m, 13h30m (10:00 to 23:30), 20m, 2h10m, 30m, 3h30m, 10m, 5h50m, 40m, 6h00m. The maximum is 13h30m = 13.5 hours.
+
+## Limits worth knowing
+
+- The longest silence ignores deleted messages: a deleted message does not split a gap (the population is `messages(df)`).
+- Laughs are English-style only (`haha`, `lol`, `lmao`, `rofl` and two laughing emoji); other languages are not detected.
+- Timestamps have minute resolution (WhatsApp exports have no seconds), so response times are multiples of 60 seconds in practice: a reply in the same minute is 0 s and the next minute is 60 s. Response-time medians therefore separate senders only coarsely.

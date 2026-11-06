@@ -176,7 +176,8 @@ def compute_stats(df: pd.DataFrame, since: Any = None, until: Any = None, *, min
         return {s: int(c[s]) for s in senders}
 
     return {
-        "window": {"since": _iso(lo) if len(pop) else _iso(lo), "until": _iso(hi), "days": WINDOW_DAYS, "inclusive": "both", "n_messages": len(w)},
+        "window": {"since": _iso(lo), "until": _iso(hi), "days": WINDOW_DAYS, "inclusive": "both", "n_messages": len(w),
+                   "first_ts": _iso(ts[0]) if ts else None, "last_ts": _iso(ts[-1]) if ts else None},  # first/last INCLUDED message
         "senders": senders,
         "top_talkers": {
             "by_messages": [{"sender": s, "messages": int(msg_n[s])} for s in senders],

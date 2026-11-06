@@ -396,3 +396,28 @@ def test_night_owl_and_early_bird_ties_go_to_the_earlier_name():
 def test_busiest_date_tie_goes_to_the_earlier_date():
     rows = [(1, "03-03 10:00", "A", "a", ""), (2, "03-03 10:05", "A", "a", ""), (3, "03-02 10:00", "A", "a", ""), (4, "03-02 10:05", "A", "a", "")]
     assert compute_stats(frame(rows))["busiest_date"] == {"date": "2026-03-02", "messages": 2}
+
+
+# ---------------------------------------------------------------- Phase 2b step 0: your independent expectations on the hand table
+def test_hand_table_expectations_from_the_reviewer(st):
+    rt = st["response_time"]
+    assert (rt["Alex"]["median_seconds"], rt["Maya"]["median_seconds"], rt["Sam"]["median_seconds"]) == (1800.0, 1500.0, 300.0)
+    assert rt["Sam"]["n"] == 2  # Sam's samples are one 0 s same-minute reply and one 600 s reply
+    assert {t["sender"]: t["messages"] for t in st["top_talkers"]["by_messages"]} == {"Sam": 6, "Alex": 5, "Maya": 4}
+    assert st["emojis"]["total"] == 8
+    assert st["links"]["total"] == 3
+    assert st["media"]["total"] == 2
+    assert st["laughs"]["total"] == 3  # rows 3, 6 and 12
+
+
+def test_window_reports_first_and_last_included_message(st):
+    assert (st["window"]["first_ts"], st["window"]["last_ts"]) == ("2026-03-02T08:00:00", "2026-03-03T18:40:00")
+    s = compute_stats(frame(), since=date(2026, 3, 3))
+    assert (s["window"]["first_ts"], s["window"]["last_ts"]) == ("2026-03-03T02:00:00", "2026-03-03T18:40:00")
+    empty = compute_stats(frame([]))["window"]
+    assert empty["first_ts"] is None and empty["last_ts"] is None
+
+
+def test_frozen_window_first_and_last_message(frozen):
+    s, raw = frozen
+    assert s["window"]["first_ts"] == raw[0][0].isoformat() and s["window"]["last_ts"] == raw[-1][0].isoformat()

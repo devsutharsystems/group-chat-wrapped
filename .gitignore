@@ -17,3 +17,4 @@ notes/
 .DS_Store
 .claude/settings.local.json
 data/synthetic/
+aliases.json
