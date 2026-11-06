@@ -38,6 +38,8 @@ def build_parser() -> argparse.ArgumentParser:
     an.add_argument("--count", action="store_true", help="exact token count via the free count_tokens endpoint (SENDS the payload to Anthropic, generates nothing)")
     an.add_argument("--confirm", action="store_true", help="count, then make the paid call (without it no generation happens)")
     an.add_argument("--budget", type=float, default=0.15, help="phase budget in USD over ledger labels starting 3b: (default 0.15)")
+    an.add_argument("--save-response", action="store_true", help="also save the raw model response and the verified report under out/runs/ (OFF by default; they hold pseudonymised quotes, delete them afterwards)")
+    an.add_argument("--phase", default="3b", help="ledger label prefix for the phase budget (default 3b)")
     an.add_argument("--truth", help="ground_truth.json of a synthetic chat: score found planted items")
     an.add_argument("--label", default="slice", help="label suffix for the ledger entry")
     an.add_argument("--date-order", choices=["mdy", "dmy"], help="override the inferred day/month order")
@@ -77,7 +79,8 @@ def analyze_cmd(args: argparse.Namespace) -> int:
         return 3
     try:
         res = az.run_analysis(df, aliases, config=args.config, slice_start=args.slice_start, slice_end=args.slice_end, confirm=args.confirm,
-                              count_only=args.count, budget=args.budget, truth_items=truth, label_suffix=args.label)
+                              count_only=args.count, budget=args.budget, truth_items=truth, label_suffix=args.label,
+                              phase=args.phase, save_response=args.save_response)
     except (az.AnalysisError, cost.CostError, OSError, RuntimeError) as e:
         print(f"gcw: {e}", file=sys.stderr)
         return 3

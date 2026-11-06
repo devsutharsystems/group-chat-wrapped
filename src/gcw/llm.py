@@ -46,6 +46,8 @@ def key_status() -> tuple[bool, int]:
 
 
 def get_client() -> Any:
+    if os.environ.get("GCW_TEST_NO_NETWORK"):  # set by tests/conftest.py for the whole test session and its subprocesses
+        raise RuntimeError("REAL API ACCESS BLOCKED IN TESTS (GCW_TEST_NO_NETWORK is set)")
     load_env()
     if not os.environ.get("ANTHROPIC_API_KEY"):
         raise RuntimeError("ANTHROPIC_API_KEY is not set (create .env in the project root)")

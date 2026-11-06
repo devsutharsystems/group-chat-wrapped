@@ -173,13 +173,24 @@ def match_planted(verified: dict, index: dict, truth_items: list[dict], mapping:
     for typ in TYPES:
         planted = sorted(t for t in in_slice if occ[t]["type"] == typ)
         found: set[str] = set()
+        strict: set[str] = set()
         matched_items = unplanted = 0
         for item in verified.get(typ, []):
             ids = {e["message_id"] for e in item["evidence"]}
             hit = {t for t in planted if ids & in_slice[t]}
             found |= hit
+            strict |= {t for t in planted if strict_hit(ids, in_slice[t])}
             matched_items += bool(hit)
             unplanted += not hit
         res[typ] = {"planted_in_slice": planted, "found": sorted(found), "recall": (len(found) / len(planted)) if planted else None,
+                    "found_strict": sorted(strict), "recall_strict": (len(strict) / len(planted)) if planted else None,
                     "items_matching_planted": matched_items, "items_unplanted": unplanted}
     return res
+
+
+def strict_hit(verified_ids: set[str], planted_ids: set[str]) -> bool:
+    """Strict rule (headline): at least min(2, planted occurrences in the slice) of the AI item's verified evidence messages are planted occurrences
+    of the same planted item, AND at least half of the item's verified evidence messages are. (A planted moment has a single planted occurrence,
+    so for it the threshold is 1.)"""
+    n = len(verified_ids & planted_ids)
+    return bool(verified_ids) and n >= min(2, len(planted_ids)) and 2 * n >= len(verified_ids)

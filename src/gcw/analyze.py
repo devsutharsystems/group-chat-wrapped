@@ -6,6 +6,7 @@ The chat is DATA inside <chat>...</chat>; '<' in chat text is neutralised so a m
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 from pathlib import Path
@@ -66,6 +67,12 @@ SCHEMA: dict = {
     "required": ["running_jokes", "moments", "awards"],
     "additionalProperties": False,
 }
+
+
+# Prompt v1 freeze (Phase 3b-fix): the hash covers the system prompt and the schema. Changing either changes it and fails
+# tests/test_analyze.py::test_prompt_version_is_pinned until the pin there is updated deliberately. (The user-message wrapper in
+# build_request is pinned by its own exact-string test.) The dev slice and the canary were seen while this prompt was written.
+PROMPT_VERSION = hashlib.sha256((SYSTEM + "\n" + json.dumps(SCHEMA, sort_keys=True)).encode("utf-8")).hexdigest()
 
 
 def validate_report(obj: Any) -> list[str]:
@@ -133,8 +140,8 @@ def _count_kwargs(req: dict) -> dict:
     return {k: v for k, v in req.items() if k != "max_tokens"}
 
 
-def _phase_spent(ledger_path: str | Path) -> float:
-    return sum(e.get("cost_usd", 0.0) for e in cost.ledger_entries(ledger_path) if str(e.get("label", "")).startswith(PHASE_LABEL))
+def _phase_spent(ledger_path: str | Path, phase: str = "3b") -> float:
+    return sum(e.get("cost_usd", 0.0) for e in cost.ledger_entries(ledger_path) if str(e.get("label", "")).startswith(phase + ":"))
 
 
 def prepare(df: pd.DataFrame, aliases: privacy.Aliases | None, *, slice_start: str | None, slice_end: str | None, keywords=None) -> dict:
@@ -152,12 +159,13 @@ def prepare(df: pd.DataFrame, aliases: privacy.Aliases | None, *, slice_start: s
 def run_analysis(df: pd.DataFrame, aliases: privacy.Aliases | None, *, config: str, slice_start: str | None = None, slice_end: str | None = None,
                  client: Any = None, guard: cost.CostGuard | None = None, confirm: bool = False, count_only: bool = False,
                  budget: float = PHASE_BUDGET_USD, out_dir: str | Path = "out/runs", truth_items: list[dict] | None = None, label_suffix: str = "slice",
-                 keywords=None) -> dict:
+                 keywords=None, phase: str = "3b", save_response: bool = False) -> dict:
     """Offline unless `count_only` (exact count_tokens, free, SENDS the payload) or `confirm` (count, then generate). Returns a result dict."""
     prep = prepare(df, aliases, slice_start=slice_start, slice_end=slice_end, keywords=keywords)
     req = build_request(prep["payload_text"], config, prep["members"])
     result: dict[str, Any] = {"config": config, "messages": len(prep["rows"]), "withheld": prep["withheld"], "payload_bytes": prep["payload_bytes"],
-                              "rough_tokens": round(prep["payload_bytes"] / privacy.BYTES_PER_TOKEN), "prep": prep, "request": req}
+                              "rough_tokens": round(prep["payload_bytes"] / privacy.BYTES_PER_TOKEN), "prep": prep, "request": req,
+                              "slice": {"start": slice_start, "end": slice_end}}
     if not (count_only or confirm):
         return result
     guard = guard or cost.CostGuard()
@@ -170,31 +178,32 @@ def run_analysis(df: pd.DataFrame, aliases: privacy.Aliases | None, *, config: s
         raise AnalysisError(f"refused: the request is {n_tokens} tokens, over the {TOKEN_STOP} stop")
     if count_only and not confirm:
         return result
-    return _generate(result, req, prep, client, guard, config, confirm, budget, Path(out_dir), truth_items, label_suffix)
+    return _generate(result, req, prep, client, guard, config, confirm, budget, Path(out_dir), truth_items, label_suffix, phase, save_response)
 
 
-def _write_log(out_dir: Path, stamp: str, config: str, log: dict, response_text: str | None, report: dict | None) -> None:
+def _write_log(out_dir: Path, stamp: str, config: str, log: dict, response_text: str | None, report: dict | None, save_response: bool = False) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     base = out_dir / f"{stamp}-{config}"
     log["api_key_length"] = llm.key_status()[1]  # length only, never the key
     base.with_suffix(".json").write_text(json.dumps(log, indent=1, default=str), encoding="utf-8")
-    if response_text is not None:  # holds quotes: pseudonymised payload excerpts (Member tokens only), local and gitignored
+    if save_response and response_text is not None:  # opt-in (--save-response): holds quotes: pseudonymised payload excerpts (Member tokens only), local and gitignored
         base.with_suffix(".response.txt").write_text(response_text, encoding="utf-8")
-    if report is not None:
+    if save_response and report is not None:
         base.with_suffix(".report.json").write_text(json.dumps(report, indent=1, ensure_ascii=False), encoding="utf-8")
 
 
 def _generate(result: dict, req: dict, prep: dict, client: Any, guard: cost.CostGuard, config: str, confirm: bool, budget: float, out_dir: Path,
-              truth_items: list[dict] | None, label_suffix: str) -> dict:
+              truth_items: list[dict] | None, label_suffix: str, phase: str = "3b", save_response: bool = False) -> dict:
     stamp = time.strftime("%Y%m%dT%H%M%S")
     log: dict[str, Any] = {"config": config, "config_params": CONFIGS.get(config), "model": MODEL, "max_tokens": MAX_TOKENS, "messages": result["messages"],
-                           "withheld": result["withheld"], "request_tokens": result["request_tokens"], "attempts": []}
+                           "withheld": result["withheld"], "request_tokens": result["request_tokens"], "prompt_version": PROMPT_VERSION, "phase": phase,
+                           "saved_response": save_response, "slice": result.get("slice"), "attempts": []}
     response_text: str | None = None
     report: dict | None = None
     try:
         for attempt in (1, 2):
             estimate = cost.estimate_usd(result["request_tokens"], MAX_TOKENS)
-            spent = _phase_spent(guard.ledger_path)
+            spent = _phase_spent(guard.ledger_path, phase)
             if spent + estimate > budget + 1e-12:
                 raise AnalysisError(f"refused: phase budget ${budget:.2f} would be exceeded (spent ${spent:.4f}, worst-case estimate ${estimate:.4f})")
             reserved = guard.check(estimate, confirm=confirm)
@@ -207,7 +216,7 @@ def _generate(result: dict, req: dict, prep: dict, client: Any, guard: cost.Cost
             latency = time.perf_counter() - t0
             usage = llm._usage_dict(getattr(resp, "usage", None))
             stop = getattr(resp, "stop_reason", None)
-            c = guard.record(f"{PHASE_LABEL}{config}:{label_suffix}", usage, MODEL, reserved=reserved,
+            c = guard.record(f"{phase}:{config}:{label_suffix}", usage, MODEL, reserved=reserved,
                              extra={"stop_reason": stop, "thinking_tokens": (usage.get("output_tokens_details") or {}).get("thinking_tokens")})
             response_text = _text_of(resp)
             att = {"attempt": attempt, "usage": usage, "stop_reason": stop, "latency_s": round(latency, 3), "cost_usd": round(c, 8)}
@@ -231,7 +240,7 @@ def _generate(result: dict, req: dict, prep: dict, client: Any, guard: cost.Cost
         final = log["attempts"][-1]
         log.update(usage=final["usage"], stop_reason=final["stop_reason"], latency_s=final["latency_s"],
                    cost_usd=round(sum(a["cost_usd"] for a in log["attempts"]), 8), stats=stats, injection_obeyed=injection_obeyed(report))
-        result.update(report=report, verified=verified, stats=stats, usage=final["usage"], stop_reason=final["stop_reason"],
+        result.update(prompt_version=PROMPT_VERSION, report=report, verified=verified, stats=stats, usage=final["usage"], stop_reason=final["stop_reason"],
                       latency_s=final["latency_s"], cost_usd=log["cost_usd"], attempts=len(log["attempts"]),
                       thinking_tokens=(final["usage"].get("output_tokens_details") or {}).get("thinking_tokens"),
                       output_tokens=final["usage"].get("output_tokens"), injection_obeyed=log["injection_obeyed"])
@@ -245,4 +254,4 @@ def _generate(result: dict, req: dict, prep: dict, client: Any, guard: cost.Cost
         log["error"] = f"{type(e).__name__}: {e}"
         raise
     finally:
-        _write_log(out_dir, stamp, config, log, response_text, verified if "verified" in locals() else None)
+        _write_log(out_dir, stamp, config, log, response_text, verified if "verified" in locals() else None, save_response)

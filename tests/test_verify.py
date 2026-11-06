@@ -193,8 +193,10 @@ def test_match_planted_found_unplanted_and_slice_rules():
     }
     res = verify.match_planted(verified, index, truth, mapping, slice_start=pd.Timestamp("2026-03-01"), slice_end=pd.Timestamp("2026-03-31"))
     # jL has only 2 occurrences: not "planted in the slice" for a running joke; m2 is outside the slice; the pii item is not scored
-    assert res["running_jokes"] == {"planted_in_slice": ["j1"], "found": ["j1"], "recall": 1.0, "items_matching_planted": 1, "items_unplanted": 0}
-    assert res["moments"] == {"planted_in_slice": ["m1"], "found": ["m1"], "recall": 1.0, "items_matching_planted": 1, "items_unplanted": 1}
+    assert res["running_jokes"] == {"planted_in_slice": ["j1"], "found": ["j1"], "recall": 1.0, "found_strict": ["j1"], "recall_strict": 1.0,
+                                    "items_matching_planted": 1, "items_unplanted": 0}
+    assert res["moments"] == {"planted_in_slice": ["m1"], "found": ["m1"], "recall": 1.0, "found_strict": ["m1"], "recall_strict": 1.0,
+                              "items_matching_planted": 1, "items_unplanted": 1}
     assert res["awards"]["recall"] is None and res["awards"]["planted_in_slice"] == []
 
 
@@ -210,3 +212,43 @@ def test_match_planted_a_miss_and_a_partial_overlap_with_the_slice():
     miss = verify.match_planted({"running_jokes": [], "moments": [joke(ev("m000004", "I got the job! Starting next month."), title="job")], "awards": []}, index,
                                 wrong_sender, mapping, slice_start=pd.Timestamp("2026-03-01"), slice_end=pd.Timestamp("2026-03-31"))
     assert miss["moments"]["planted_in_slice"] == [] and miss["moments"]["items_unplanted"] == 1  # sender must match too
+
+
+@pytest.mark.parametrize("verified_ids, planted, strict", [
+    ({"a", "b", "c"}, {"a", "b", "c", "d"}, True),   # 3 of 3 planted
+    ({"a", "b", "x", "y"}, {"a", "b", "c"}, True),   # 2 planted, exactly half of 4
+    ({"a", "b", "x", "y", "z"}, {"a", "b", "c"}, False),  # 2 planted but under half of 5
+    ({"a", "x", "y"}, {"a", "b", "c"}, False),       # only 1 planted: a joke needs 2
+    ({"a"}, {"a"}, True),                            # a moment (one planted occurrence): threshold 1
+    ({"a", "x"}, {"a"}, True),                       # moment: 1 of 2 is exactly half
+    ({"a", "x", "y"}, {"a"}, False),                 # moment: 1 of 3 is under half
+    ({"x"}, {"a", "b"}, False), (set(), {"a"}, False),
+    ({"a", "b"}, {"a", "b"}, True),                  # planted item with exactly 2 occurrences in the slice
+])
+def test_strict_hit_rule(verified_ids, planted, strict):
+    assert verify.strict_hit(verified_ids, planted) is strict
+
+
+def test_strict_is_stricter_than_lenient_in_match_planted():
+    index, mapping, truth = planted_world()
+    one_of_many = {"running_jokes": [joke(ev("m000001", "the stapler has opinions again"), ev("m000004", "I got the job! Starting next month."),
+                                          ev("m000005", "totally different filler line"))], "moments": [], "awards": []}
+    res = verify.match_planted(one_of_many, index, truth, mapping, slice_start=pd.Timestamp("2026-03-01"), slice_end=pd.Timestamp("2026-03-31"))
+    assert res["running_jokes"]["found"] == ["j1"] and res["running_jokes"]["found_strict"] == [] and res["running_jokes"]["recall_strict"] == 0.0
+
+
+def test_a_quote_with_an_angle_bracket_passes_verification_and_displays_as_the_original():
+    import html
+
+    from gcw import card
+
+    rows, _, _ = privacy.build_payload_rows(frame([(1, "03-02 09:00", "Sam", "I <3 pizza always", "")]), al("Sam"))
+    index = verify.make_index(rows)
+    assert index["m000001"]["text"] == "I " + chr(0xFF1C) + "3 pizza always"  # what the model is shown
+    quote = "I " + chr(0xFF1C) + "3 pizza always"  # what it copies
+    out, st = verify.verify_report({"running_jokes": [], "awards": [], "moments": [{"title": "pizza love", "summary": "s", "evidence": [{"message_id": "m000001", "quote": quote}]}]},
+                                   index, valid_members={"Member 1"})
+    assert len(out["moments"]) == 1 and st["evidence_verified"] == 1
+    shown = card.display_text(out["moments"][0]["evidence"][0]["quote"])
+    assert shown == "I &lt;3 pizza always" and html.unescape(shown) == "I <3 pizza always" and chr(0xFF1C) not in shown and "<" not in shown
+    assert card.display_text(chr(0xFF1C) + "script>") == "&lt;script&gt;"  # still escaped: the mapping back never produces live markup

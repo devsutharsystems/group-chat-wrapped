@@ -59,22 +59,12 @@ def frozen_df():
     return parse_chat(FROZEN)[0]
 
 
-@pytest.fixture(autouse=True)
-def no_real_client(monkeypatch):
-    """Tests never reach the network: building a real client is an error (a fake client is always passed)."""
-    from gcw import llm
-
-    def boom():
-        raise AssertionError("a test tried to build a real Anthropic client")
-
-    monkeypatch.setattr(llm, "get_client", boom)
-
-
 EXAMPLE = privacy.load_aliases(ROOT / "aliases.example.json")
 
 
 def go(df, aliases, client, env, **kw):
     kw.setdefault("confirm", True)
+    kw.setdefault("save_response", True)  # most tests inspect the saved files; test_save_response_is_opt_in covers the default
     return analyze.run_analysis(df, aliases, config=kw.pop("config", "A"), client=client, guard=env.guard, out_dir=env.out, **kw)
 
 
@@ -300,7 +290,7 @@ def test_the_guard_refuses_a_call_without_confirm(env):
 # ---------------------------------------------------------------- CLI
 def _env():
     e = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
-    return {**e, "PYTHONPATH": str(ROOT / "src"), "ANTHROPIC_API_KEY": ""}  # empty, so llm.load_env cannot pull the real key from .env
+    return {**e, "PYTHONPATH": str(ROOT / "src"), "ANTHROPIC_API_KEY": "", "GCW_TEST_NO_NETWORK": "1"}
 
 
 def test_cli_offline_default_sends_nothing_and_imports_no_anthropic(tmp_path):
@@ -319,4 +309,62 @@ def test_cli_errors(tmp_path):
     r = subprocess.run(base + [str(FROZEN), "--aliases", str(tmp_path / "x.json")], env=_env(), capture_output=True, text=True)
     assert r.returncode == 2 and "bad aliases file" in r.stderr
     r = subprocess.run(base + [str(FROZEN), "--aliases", str(ROOT / "aliases.example.json"), "--count", "--slice-end", "2026-02-08"], env=_env(), capture_output=True, text=True, cwd=tmp_path)
-    assert r.returncode == 3 and "ANTHROPIC_API_KEY is not set" in r.stderr  # no key: refused cleanly, nothing sent
+    assert r.returncode == 3 and "BLOCKED IN TESTS" in r.stderr  # the session block: nothing was sent
+
+
+# ---------------------------------------------------------------- prompt v1 freeze
+EXPECTED_PROMPT_VERSION = "a4498b04960adc6bf7fd664cf5c6ef95dc206811d3169a02063b7d7952febc56"
+EXPECTED_USER_TEMPLATE = "<chat>\nPAYLOAD\n</chat>\n\nMembers present: Member 1, Member 2.\nAnalyse the chat above."
+
+
+def test_prompt_version_is_pinned():
+    assert analyze.PROMPT_VERSION == EXPECTED_PROMPT_VERSION, (
+        "The system prompt or the schema changed, so PROMPT_VERSION changed. Prompt v1 is frozen: if this change is deliberate, record why in "
+        "docs/PRD.md (the evaluation section: it is tuned on dev data only) and update EXPECTED_PROMPT_VERSION here.")
+
+
+def test_any_change_to_the_prompt_or_schema_changes_the_hash():
+    import copy
+    import hashlib
+
+    def h(system, schema):
+        return hashlib.sha256((system + "\n" + json.dumps(schema, sort_keys=True)).encode("utf-8")).hexdigest()
+
+    assert h(analyze.SYSTEM, analyze.SCHEMA) == analyze.PROMPT_VERSION  # the documented definition
+    assert h(analyze.SYSTEM + " ", analyze.SCHEMA) != analyze.PROMPT_VERSION
+    assert h(analyze.SYSTEM.replace("12 characters", "11 characters"), analyze.SCHEMA) != analyze.PROMPT_VERSION
+    changed = copy.deepcopy(analyze.SCHEMA)
+    changed["properties"]["moments"]["items"]["properties"]["extra"] = {"type": "string"}
+    assert h(analyze.SYSTEM, changed) != analyze.PROMPT_VERSION
+
+
+def test_user_message_template_is_pinned():
+    assert analyze.build_request("PAYLOAD\n", "A", ["Member 1", "Member 2"])["messages"][0]["content"] == EXPECTED_USER_TEMPLATE
+
+
+def test_prompt_version_is_in_every_run_log(env):
+    res = go(SMALL, SMALL_AL, FakeClient(), env)
+    log = json.loads(next(p for p in env.out.iterdir() if p.name.endswith("A.json")).read_text())
+    assert log["prompt_version"] == analyze.PROMPT_VERSION == res["prompt_version"] and log["slice"] == {"start": None, "end": None}
+
+
+# ---------------------------------------------------------------- --save-response is opt-in, phases
+def test_save_response_is_opt_in(env):
+    resp = json.dumps({"running_jokes": [], "awards": [], "moments": [{"title": "greeting", "summary": "a hello", "evidence": [{"message_id": "m000001", "quote": "hello there everyone"}]}]})
+    go(SMALL, SMALL_AL, FakeClient([resp]), env, save_response=False)
+    names = sorted(p.name.split("-")[-1] for p in env.out.iterdir())
+    assert names == ["A.json"]  # the log only: no raw response, no report
+    log = json.loads(next(env.out.iterdir()).read_text())
+    assert log["saved_response"] is False and "hello there everyone" not in json.dumps(log)
+    go(SMALL, SMALL_AL, FakeClient([resp]), env, save_response=True)
+    assert sum(p.name.endswith(".response.txt") for p in env.out.iterdir()) == 1 and sum(p.name.endswith(".report.json") for p in env.out.iterdir()) == 1
+
+
+def test_phase_prefix_sets_the_ledger_label_and_its_own_budget(env):
+    cost._append(Path(env.guard.ledger_path), {"label": "3b:A:slice", "cost_usd": 0.14})  # old phase: must not count against the new phase
+    client = FakeClient()
+    go(SMALL, SMALL_AL, client, env, phase="3bfix", budget=0.10)
+    assert cost.ledger_entries(env.guard.ledger_path)[-1]["label"] == "3bfix:A:slice"
+    cost._append(Path(env.guard.ledger_path), {"label": "3bfix:B:x", "cost_usd": 0.095})
+    with pytest.raises(analyze.AnalysisError, match="phase budget"):
+        go(SMALL, SMALL_AL, FakeClient(), env, phase="3bfix", budget=0.10)

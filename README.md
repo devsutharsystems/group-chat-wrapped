@@ -35,3 +35,7 @@ Copy `aliases.example.json` to `aliases.json` (gitignored) to show display names
 ## AI analysis (3b)
 
 `python -m gcw analyze CHAT --aliases aliases.json --slice-end 2026-02-08 --config A` prints the payload preview and a rough size and sends nothing. Add `--count` for the exact token count (free, but it sends the pseudonymised payload) and `--confirm` to run (cost guard, $0.15 phase budget, refused over 95,000 tokens). Every claim is checked in code: a running joke, moment or award is kept only if its quotes are exact substrings of the cited messages (see `docs/PRD.md` section 4). On the synthetic slice one call cost about $0.009.
+
+**Saved responses.** `--save-response` (off by default) also writes the raw model response and the verified report into `out/runs/`. They contain pseudonymised quotes from your chat: a run on a real chat with the flag leaves them in the gitignored `out/runs/`, so delete them afterwards. Without the flag only a log (config, token counts, cost, verification counts, prompt hash) is written.
+
+**What was tested against prompt injection:** 7 attempts (the planted line from the chat plus three rewritten phrasings, configs A and B) on one synthetic chat, 0 obeyed. That is a probe, not a guarantee: this README does not claim the defence is robust, and real chats may contain phrasings that work. Every model claim is still checked in code against the exact messages, which limits what an injected instruction can put on the card.

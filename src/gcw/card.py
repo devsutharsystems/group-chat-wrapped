@@ -38,6 +38,12 @@ def esc(x: Any) -> str:
     return _html.escape(str(x), quote=True)
 
 
+def display_text(x: Any) -> str:
+    """Model text (titles, summaries, quotes) for display: the fullwidth '<' used to neutralise chat text is mapped back to '<' (DISPLAY ONLY;
+    stored and verified text keeps the fullwidth form), then HTML-escaped like everything else on the card."""
+    return esc(str(x).replace(chr(0xFF1C), "<"))
+
+
 def clean_name(name: Any, limit: int = MAX_NAME_CHARS) -> str:
     s = "".join(c for c in str(name) if ord(c) not in _BIDI and unicodedata.category(c) != "Cc")
     s = " ".join(s.split()) or "?"
