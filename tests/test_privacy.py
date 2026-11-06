@@ -550,8 +550,6 @@ def test_missing_keyword_file_fails_closed_with_a_clear_error(tmp_path, monkeypa
 PLANTED_KINDS = ("joke", "long_joke", "moment")
 
 
-@pytest.mark.xfail(strict=True, reason="KNOWN, awaiting the owner's decision (Phase 3a-fix item 2): the screen keyword 'party' (politics) withholds the planted moment m1, "
-                   "'the surprise party is happening this Saturday'. Remove this marker once the keyword list is decided; the target is 0 hits.")
 def test_planted_jokes_long_joke_and_moments_are_not_withheld_or_altered():
     verify_dataset()
     df, _ = parse_chat(FROZEN)
@@ -571,3 +569,11 @@ def test_planted_jokes_long_joke_and_moments_are_not_withheld_or_altered():
         if bodies[i] != privacy.clean(pop["text"][i]):
             hit.append((it["kind"], it["id"], privacy.sensitive_hits(it["text"]), bodies[i]))
     assert hit == [], hit
+
+
+def test_party_alone_is_not_sensitive_but_political_party_is():
+    for t in ["surprise party on Saturday", "Party time!", "hang on wait I have to find my old party speaker", "the party is at 8"]:
+        assert not privacy.sensitive_screen(t), t
+    for t in ["which political party will win", "Political   Party meeting", "I joined a political party", "bjp or congress?", "a democrat and a republican"]:
+        assert privacy.sensitive_screen(t), t
+    assert "political party" in privacy.load_keywords()["politics"] and "party" not in privacy.load_keywords()["politics"]
