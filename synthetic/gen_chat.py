@@ -508,6 +508,9 @@ def collect(specs: list[BatchSpec], filler: Callable[[BatchSpec], list[str]], wo
             except Exception as e:  # API/transport error: stop everything, never retry here
                 stop.set()
                 failures.append(f"API ERROR {type(e).__name__}: {e}")
+            if len(failures) > 3 and not stop.is_set():
+                stop.set()
+                failures.append("STOP: more than 3 failed batches")
             done += 1
             if done % 10 == 0 or done == len(specs):
                 log(f"progress {done}/{len(specs)} batches, {len(failures)} failure(s)")

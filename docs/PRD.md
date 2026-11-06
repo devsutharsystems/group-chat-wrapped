@@ -70,6 +70,7 @@ All evaluation uses synthetic chats only. A real chat is never used for evaluati
 
 - **Verified-quote rate** = verified evidence / total evidence, per run.
 - **Precision:** >=40 hand-rated claims (true / partly / false); precision = true / rated.
+- **Precision rubric:** a claim is TRUE if its evidence shows the recurrence in the chat, even if unplanted (tag it unplanted-true); FALSE if the evidence does not support it. Recall counts planted items only. The filler has natural tics (e.g. Sam's 'honestly', Riley's 'ok ok'); they are not errors.
 - **Planted-item recall by position:** plant known jokes/moments at start, middle and end of a long synthetic chat; recall = found / planted, reported per position.
 - **Single-pass vs chunked** (chunks under 100K tokens): compare recall, cost and latency.
 - **Hypothesis (written before any run):** single-pass wins recall on long-range jokes (jokes whose evidence spans more than one chunk); chunked wins cost, because input under 100K tokens is $0.10/MTok versus $0.50/MTok above it. We expect latency to be mixed.
