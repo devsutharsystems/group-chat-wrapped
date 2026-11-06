@@ -87,3 +87,10 @@ def test_indian_phone_formats_flagged(tmp_path, parts):
 
 def test_iso_date_2026_11_05_not_flagged(tmp_path):
     assert scan(make(tmp_path, {"a.md": "2026" + "-11-05"})) == []
+
+
+def test_local_path_flagged(tmp_path):
+    bad = "/" + "Users" + "/" + "someone" + "/proj/x"
+    assert scan(make(tmp_path, {"a.md": "see " + bad}))
+    assert scan(make(tmp_path / "h", {"a.md": "/" + "home" + "/someone/x"}))
+    assert scan(make(tmp_path / "t", {"a.md": "see ~/proj/x and /usr/bin"})) == []

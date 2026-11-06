@@ -10,13 +10,14 @@ import sys
 from pathlib import Path
 
 SKIP_DIRS = {".git", ".venv", ".cache", "out", "__pycache__", ".pytest_cache", "notes", "data"}
-SKIP_FILES = {".env", ".gcw_ledger.json"}
+SKIP_FILES = {".env", ".gcw_ledger.json", "settings.local.json"}
 SPACE = "[  ]"  # plain or narrow no-break space
 ANDROID = re.compile(rf"^‎?\d{{1,2}}/\d{{1,2}}/\d{{2,4}},{SPACE}\d{{1,2}}:\d{{2}}{SPACE}?[AaPp][Mm]{SPACE}-{SPACE}(?P<name>[^:]+):")
 IOS = re.compile(r"^‎?\[\d{1,2}/\d{1,2}/\d{2,4},\s\d{1,2}:\d{2}:\d{2}(?:[  ][AaPp][Mm])?\]\s(?P<name>[^:]+):")
 PHONE = re.compile(r"(?<![\w.])\+?\d[\d\s().-]{8,}\d(?![\w.])")
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 KEY = re.compile(r"sk-[A-Za-z0-9_-]{16,}|(?i:api[_-]?key|secret|token)\s*[=:]\s*['\"]?[A-Za-z0-9_\-]{20,}")
+LOCAL_PATH = re.compile(r"/(?:Users|home)/[A-Za-z0-9._-]+/|[A-Za-z]:\\Users\\[^\\\s]+\\")
 ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 FAKE_PHONE = re.compile(r"^\+?0{2}[\s0-]+$")
 
@@ -52,6 +53,8 @@ def scan_file(path: Path, root: Path, names: set[str]) -> list[str]:
         for m in EMAIL.finditer(line):
             if not m.group().lower().endswith("@example.com"):
                 out.append(f"{rel}:{n}: email")
+        if LOCAL_PATH.search(line):
+            out.append(f"{rel}:{n}: absolute local path")
         if KEY.search(line):
             out.append(f"{rel}:{n}: api-key-like string")
     return out
