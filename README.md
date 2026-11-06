@@ -31,3 +31,7 @@ Copy `aliases.example.json` to `aliases.json` (gitignored) to show display names
 ## Privacy
 
 `python -m gcw preview CHAT --aliases aliases.json` shows the exact text that would be sent to the model (names replaced by `Member N`, links, emails, phones and long numbers redacted, sensitive-keyword messages withheld). Copy `aliases.example.json` to `aliases.json` (gitignored) and list your members and nicknames. Pseudonymised text IS sent to Anthropic in AI mode. Limits: only names and nicknames listed in `aliases.json` are replaced (a surname alone, for example "ALEX KIM" with only "Alex Kim" and "Alex" listed, becomes "Member 2 KIM"); members whose first name is a common word (Will, Hope) need `"case_sensitive": true`; the keyword screen is English-only. See `docs/privacy.md`.
+
+## AI analysis (3b)
+
+`python -m gcw analyze CHAT --aliases aliases.json --slice-end 2026-02-08 --config A` prints the payload preview and a rough size and sends nothing. Add `--count` for the exact token count (free, but it sends the pseudonymised payload) and `--confirm` to run (cost guard, $0.15 phase budget, refused over 95,000 tokens). Every claim is checked in code: a running joke, moment or award is kept only if its quotes are exact substrings of the cited messages (see `docs/PRD.md` section 4). On the synthetic slice one call cost about $0.009.

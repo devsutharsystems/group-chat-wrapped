@@ -43,3 +43,7 @@ Resolved in 3a-fix2 (below). Earlier known screen hit: the keyword `party` (poli
 | percent of 5,136 | 1.13% | 0.64% (filler alone 0.56%) |
 
 The remaining 'dead', 'vote', 'owe' etc. false positives are unchanged by decision.
+
+## What AI mode sends (Phase 3b)
+
+`python -m gcw analyze` sends the payload text (the `<id> | <time> | Member N | text` lines, with `<` replaced by the fullwidth `＜`) plus a fixed system prompt that contains no names. The exact token count uses the free `count_tokens` endpoint, which also receives the payload, so `--count` and `--confirm` both send it; running `analyze` with no flag sends nothing. Saved run files (`out/runs/`, gitignored) hold the model's response, which quotes pseudonymised payload text; they contain Member tokens only, no real names, and never the API key (only its length).

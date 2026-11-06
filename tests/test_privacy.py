@@ -571,9 +571,26 @@ def test_planted_jokes_long_joke_and_moments_are_not_withheld_or_altered():
     assert hit == [], hit
 
 
-def test_party_alone_is_not_sensitive_but_political_party_is():
-    for t in ["surprise party on Saturday", "Party time!", "hang on wait I have to find my old party speaker", "the party is at 8"]:
-        assert not privacy.sensitive_screen(t), t
-    for t in ["which political party will win", "Political   Party meeting", "I joined a political party", "bjp or congress?", "a democrat and a republican"]:
-        assert privacy.sensitive_screen(t), t
+@pytest.mark.parametrize("text", [
+    pytest.param("surprise party on Saturday", id="surprise-party-on-saturday"),
+    pytest.param("Party time!", id="party-time"),
+    pytest.param("hang on wait I have to find my old party speaker", id="old-party-speaker"),
+    pytest.param("the party is at 8", id="party-at-8"),
+])
+def test_party_alone_is_not_withheld(text):
+    assert not privacy.sensitive_screen(text)
+
+
+@pytest.mark.parametrize("text", [
+    pytest.param("which political party will win", id="which-political-party-will-win"),
+    pytest.param("Political   Party meeting", id="political-party-meeting-extra-spaces"),
+    pytest.param("I joined a political party", id="joined-a-political-party"),
+    pytest.param("bjp or congress?", id="named-parties-bjp-congress"),
+    pytest.param("a democrat and a republican", id="named-parties-democrat-republican"),
+])
+def test_political_party_and_named_parties_are_withheld(text):
+    assert privacy.sensitive_screen(text)
+
+
+def test_keyword_list_has_political_party_not_party():
     assert "political party" in privacy.load_keywords()["politics"] and "party" not in privacy.load_keywords()["politics"]

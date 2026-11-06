@@ -348,30 +348,31 @@ def sensitive_screen(text: str, path: Path | str | None = None) -> bool:
 
 
 # ------------------------------------------------------------------ payload
-def build_payload(df: pd.DataFrame, aliases: Aliases | None = None, keywords: Path | str | None = None) -> tuple[str, dict, dict[str, str]]:
-    """Return (payload_text, counts, mapping). One line per message of messages(df):
-    `<id> | <YYYY-MM-DD HH:MM> | Member 3 | text` (id like m000123); media -> [media]; sensitive -> [withheld: sensitive]. ids are sequential over the filtered chat.
+def build_payload_rows(df: pd.DataFrame, aliases: Aliases | None = None, keywords: Path | str | None = None) -> tuple[list[dict], dict, dict[str, str]]:
+    """Return (rows, counts, mapping). One row per message of messages(df), ids sequential over the WHOLE filtered chat (so a slice of rows keeps
+    its true ids). Row keys: pid ('m000123'), parser_id, ts, sender (token), sender_name (export name: LOCAL ONLY, never serialise), body, withheld, media.
     mapping (token -> export name) is local only."""
     ps = Pseudonymiser(df, aliases)
     pop = messages(df)
     rep: Counter = Counter()
     withheld: Counter = Counter()
-    lines = []
-    for n, (ts, sender, text, is_media) in enumerate(zip(pop["ts"], pop["sender"], pop["text"], pop["is_media"]), start=1):
+    rows: list[dict] = []
+    for n, (pid, ts, sender, text, is_media) in enumerate(zip(pop["id"], pop["ts"], pop["sender"], pop["text"], pop["is_media"]), start=1):
+        wh = False
         if is_media:
             body = MEDIA
         else:
             hits = sensitive_hits(text, keywords)
             if hits:
-                body = WITHHELD
+                body, wh = WITHHELD, True
                 withheld.update(hits[:1])
             else:
                 body = _scrub(text, ps.matcher, rep)
-        lines.append(f"m{n:06d} | {ts:%Y-%m-%d %H:%M} | {ps.sender(sender)} | {body}")
-    text_out = "\n".join(lines) + ("\n" if lines else "")
+        rows.append({"pid": f"m{n:06d}", "parser_id": pid, "ts": ts, "sender": ps.sender(sender), "sender_name": sender, "body": body, "withheld": wh, "media": bool(is_media)})
+    text_out = rows_text(rows)
     nbytes = len(text_out.encode("utf-8"))
     counts = {
-        "messages": len(lines),
+        "messages": len(rows),
         "withheld": int(sum(withheld.values())),
         "withheld_by_category": dict(withheld),
         "replacements": {k: int(rep.get(k, 0)) for k in (*PLACEHOLDERS, "name")},
@@ -381,4 +382,20 @@ def build_payload(df: pd.DataFrame, aliases: Aliases | None = None, keywords: Pa
         "prefix": ps.prefix,
         "warnings": ps.warnings,
     }
-    return text_out, counts, ps.mapping
+    return rows, counts, ps.mapping
+
+
+def row_line(r: dict) -> str:
+    return f"{r['pid']} | {r['ts']:%Y-%m-%d %H:%M} | {r['sender']} | {r['body']}"
+
+
+def rows_text(rows: list[dict]) -> str:
+    return "\n".join(row_line(r) for r in rows) + ("\n" if rows else "")
+
+
+def build_payload(df: pd.DataFrame, aliases: Aliases | None = None, keywords: Path | str | None = None) -> tuple[str, dict, dict[str, str]]:
+    """Return (payload_text, counts, mapping). One line per message of messages(df):
+    `<id> | <YYYY-MM-DD HH:MM> | Member 3 | text` (id like m000123); media -> [media]; sensitive -> [withheld: sensitive]. ids are sequential over the filtered chat.
+    mapping (token -> export name) is local only."""
+    rows, counts, mapping = build_payload_rows(df, aliases, keywords)
+    return rows_text(rows), counts, mapping
