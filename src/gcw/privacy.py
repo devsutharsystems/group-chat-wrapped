@@ -17,6 +17,7 @@ import re
 import unicodedata
 from collections import Counter
 from dataclasses import dataclass, field
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +28,7 @@ from gcw.parser import messages
 from gcw.textnorm import normalise_for_match
 
 ROOT = Path(__file__).resolve().parents[2]
-KEYWORDS_PATH = ROOT / "config" / "sensitive_keywords.json"
+KEYWORDS_RESOURCE = "sensitive_keywords.json"  # packaged in gcw/data (package-data in pyproject.toml), read via importlib.resources
 BYTES_PER_TOKEN = 2.37  # raw frozen chat: 571,701 bytes / 241,311 count_tokens tokens (Phase 1a). Rough; measured on RAW text, not the payload
 PREFIXES = ("Member", "Person", "Speaker", "Participant")
 WITHHELD = "[withheld: sensitive]"
@@ -306,18 +307,29 @@ def _term_regex(term: str) -> str:
     return body + (r"\p{L}*" if stem else "")
 
 
-def load_keywords(path: Path | str = KEYWORDS_PATH) -> dict[str, list[str]]:
-    p = Path(path)
-    if not p.is_file():
-        raise FileNotFoundError(f"sensitive keyword list not found: {p} (config/sensitive_keywords.json is read from the repo, not packaged)")
-    data = json.loads(p.read_text(encoding="utf-8"))
-    cats = data.get("categories")
+def _read_keywords_text(path: Path | str | None) -> tuple[str, str]:
+    """(source label, JSON text). Default: the packaged resource. A missing file fails CLOSED with a clear error (no screen = no payload)."""
+    if path is not None:
+        p = Path(path)
+        if not p.is_file():
+            raise FileNotFoundError(f"sensitive keyword list not found: {p}")
+        return str(p), p.read_text(encoding="utf-8")
+    try:
+        res = resources.files("gcw").joinpath("data", KEYWORDS_RESOURCE)
+        return "gcw/data/" + KEYWORDS_RESOURCE, res.read_text(encoding="utf-8")
+    except (FileNotFoundError, OSError, ModuleNotFoundError) as e:
+        raise FileNotFoundError(f"sensitive keyword list missing from the installed package (gcw/data/{KEYWORDS_RESOURCE}); refusing to build a payload without the screen") from e
+
+
+def load_keywords(path: Path | str | None = None) -> dict[str, list[str]]:
+    label, raw = _read_keywords_text(path)
+    cats = json.loads(raw).get("categories")
     if not isinstance(cats, dict) or not all(isinstance(v, list) and all(isinstance(t, str) and t.strip() for t in v) for v in cats.values()):
-        raise ValueError("sensitive_keywords.json: 'categories' must map names to lists of non-empty strings")
+        raise ValueError(f"{label}: 'categories' must map names to lists of non-empty strings")
     return cats
 
 
-def _compiled(path: Path | str) -> dict[str, Any]:
+def _compiled(path: Path | str | None) -> dict[str, Any]:
     key = str(path)
     if key not in _screen_cache:
         _screen_cache[key] = {c: regex.compile(r"(?i)(?<![\p{L}\p{N}])(?:" + "|".join(_term_regex(t) for t in terms) + r")(?![\p{L}\p{N}])")
@@ -325,18 +337,18 @@ def _compiled(path: Path | str) -> dict[str, Any]:
     return _screen_cache[key]
 
 
-def sensitive_hits(text: str, path: Path | str = KEYWORDS_PATH) -> list[str]:
+def sensitive_hits(text: str, path: Path | str | None = None) -> list[str]:
     t = clean(text)
     return [c for c, rx in _compiled(path).items() if rx.search(t)]
 
 
-def sensitive_screen(text: str, path: Path | str = KEYWORDS_PATH) -> bool:
+def sensitive_screen(text: str, path: Path | str | None = None) -> bool:
     """True if the message matches any keyword (it is then withheld). Runs on the original text, before redaction."""
     return bool(sensitive_hits(text, path))
 
 
 # ------------------------------------------------------------------ payload
-def build_payload(df: pd.DataFrame, aliases: Aliases | None = None, keywords: Path | str = KEYWORDS_PATH) -> tuple[str, dict, dict[str, str]]:
+def build_payload(df: pd.DataFrame, aliases: Aliases | None = None, keywords: Path | str | None = None) -> tuple[str, dict, dict[str, str]]:
     """Return (payload_text, counts, mapping). One line per message of messages(df):
     `<id> | <YYYY-MM-DD HH:MM> | Member 3 | text` (id like m000123); media -> [media]; sensitive -> [withheld: sensitive]. ids are sequential over the filtered chat.
     mapping (token -> export name) is local only."""

@@ -17,6 +17,7 @@
 - Commits end with the Co-Authored-By line from the session attribution.
 - Spec is Prateek's, truncated at "…": build to R1–R7 in `docs/PRD.md`.
 - Commit only with `&&` after `pytest` and `scripts/scan_repo.py` both pass (e.g. `pytest && scripts/scan_repo.py && git commit ...`); never chain with `;`.
+- Before any push, history must not contain build/, *.egg-info or .cache: `git log --all --name-only --pretty=format: | grep -cE '^(build/|.*\.egg-info|\.cache/)'` must print 0; if not, rewrite local history before pushing.
 - Before any push, run `git log -p --all | grep -cE '/U[s]ers/'` and expect 0 (the `[s]` keeps this line itself from matching). The scanner only checks tracked files, so `git add -A` before running it.
 - Never pipe `pytest` or `scan_repo` into `tail`/`head`/`grep` inside a gate chain; run them unpiped so `&&` sees the exit code.
 - Stats and the AI layer read `gcw.parser.messages(df)` (no system lines, no deleted messages), never the raw `parse_chat` DataFrame.

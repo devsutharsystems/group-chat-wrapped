@@ -12,7 +12,7 @@ import pandas as pd
 import pytest
 
 from gcw.dataset import verify_dataset
-from gcw.stats import compute_stats, emoji_clusters
+from gcw.stats import WEEKDAYS, compute_stats, emoji_clusters
 
 ROOT = Path(__file__).resolve().parent.parent
 FROZEN = ROOT / "synthetic" / "frozen" / "chat_synthetic.txt"
@@ -82,6 +82,18 @@ def test_busiest_hour_weekday_date(st):
     assert b["weekday"]["overall"] == "Monday"
     assert b["weekday"]["per_sender"] == {"Sam": "Tuesday", "Alex": "Monday", "Maya": "Monday"}
     assert st["busiest_date"] == {"date": "2026-03-02", "messages": 8}
+
+
+def test_busiest_slot_is_one_joint_maximum_hand_table(st):
+    # by hand, visible rows only: Monday 08 = rows 2,3,4,5 -> 4; Monday 23 = 2; Tuesday 02 = 2, 06 = 2, 12 = 2, 18 = 1
+    assert st["busiest"]["slot"] == {"weekday": "Monday", "hour": 8, "messages": 4}
+
+
+def test_busiest_slot_ties_go_to_the_earlier_weekday_then_the_earlier_hour():
+    rows = [(1, "03-03 09:00", "A", "x", ""), (2, "03-03 09:10", "A", "x", ""), (3, "03-02 15:00", "A", "x", ""), (4, "03-02 15:30", "A", "x", ""),
+            (5, "03-02 07:00", "A", "x", ""), (6, "03-02 07:30", "A", "x", "")]
+    assert compute_stats(frame(rows))["busiest"]["slot"] == {"weekday": "Monday", "hour": 7, "messages": 2}  # three 2-message slots: Mon 07 first
+    assert compute_stats(frame([]))["busiest"]["slot"] is None
 
 
 def test_night_owl_early_bird_bands(st):
@@ -421,3 +433,15 @@ def test_window_reports_first_and_last_included_message(st):
 def test_frozen_window_first_and_last_message(frozen):
     s, raw = frozen
     assert s["window"]["first_ts"] == raw[0][0].isoformat() and s["window"]["last_ts"] == raw[-1][0].isoformat()
+
+
+def test_frozen_busiest_slot_from_a_plain_loop_and_it_differs_from_the_two_separate_maxima(frozen):
+    import collections
+
+    raw = raw_messages()
+    joint = collections.Counter((t.weekday(), t.hour) for t, _, _ in raw)
+    ranked = joint.most_common(3)
+    assert [(WEEKDAYS[w], h, n) for (w, h), n in ranked[:2]] == [("Saturday", 22, 285), ("Saturday", 14, 181)]
+    assert frozen[0]["busiest"]["slot"] == {"weekday": "Saturday", "hour": 22, "messages": 285}
+    assert frozen[0]["busiest"]["weekday"]["overall"] == "Saturday" and frozen[0]["busiest"]["hour"]["overall"] == 15  # the separate maxima disagree
+    assert joint[(5, 15)] == 87  # the slot the old "Sat 15:00" tile pointed at

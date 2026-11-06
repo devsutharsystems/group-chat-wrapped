@@ -104,6 +104,7 @@ def test_redact_positives(text, want):
     "price 99.99 only",
     "score 21-19 at the end",
     "12345 is five digits",
+    "call +" + " ".join("1234567") + " now",  # plus sign, but only 7 digits (spread out): below the 8-digit minimum for an international number
 ])
 def test_redact_negatives(text):
     assert red(text) == text
@@ -173,6 +174,37 @@ def test_nickname_first_name_and_longest_first():
 def test_case_sensitive_member():
     texts, _, _ = pn(al(("Will", "Will", [], True), "Sam"), [("Sam", "Will will go; WILL too")])
     assert texts == ["Member 1 will go; WILL too"]
+
+
+def test_case_sensitive_full_name_must_not_swallow_a_case_insensitive_first_name_of_another_member():
+    """Killed mutant: ignoring the case-sensitivity of 'Alex Kim' lets 'ALEX KIM' match as a whole, find no token for that exact text and leave it,
+    although the other member 'Alex' (case-insensitive) must still be replaced inside it."""
+    texts, _, _ = pn(al(("Alex Kim", "Alex Kim", [], True), "Alex"), [("Alex", "ALEX KIM and alex kim and Alex Kim")])
+    assert texts == ["Member 2 KIM and Member 2 kim and Member 1"]
+
+
+def test_last_resort_at_rule_is_unreachable_brute_force():
+    """The final ANY_AT_LETTER rule never fires: every '@' followed by a letter is already taken by the handle rule. Checked over every string
+    of length <= 5 from an 8-symbol alphabet (the 3a-fix run covered length <= 6: 299,592 strings, 0 differences)."""
+    import itertools
+    from collections import Counter
+
+    never = regex.compile(r"(?!x)x")
+    real = privacy.ANY_AT_LETTER
+    alpha = ["@", "a", chr(0xC9), "1", ".", "_", " ", "/"]
+    try:
+        n = 0
+        for length in range(1, 6):
+            for tup in itertools.product(alpha, repeat=length):
+                text = "".join(tup)
+                privacy.ANY_AT_LETTER = real
+                a = privacy._scrub(text, None, Counter())
+                privacy.ANY_AT_LETTER = never
+                assert a == privacy._scrub(text, None, Counter()), text
+                n += 1
+    finally:
+        privacy.ANY_AT_LETTER = real
+    assert n == sum(8 ** k for k in range(1, 6))
 
 
 def test_unknown_senders_get_tokens_and_their_names_are_replaced_too():
@@ -293,7 +325,7 @@ def test_the_four_planted_sensitive_messages_are_all_withheld():
 
 def own_keyword_matcher():
     """Plain-Python re-implementation of the screen, for the frozen Latin-script chat only."""
-    cats = json.loads((ROOT / "config" / "sensitive_keywords.json").read_text(encoding="utf-8"))["categories"]
+    cats = json.loads((ROOT / "src" / "gcw" / "data" / "sensitive_keywords.json").read_text(encoding="utf-8"))["categories"]
     pats = []
     for terms in cats.values():
         for t in terms:
@@ -481,3 +513,61 @@ def test_preview_cli_errors(tmp_path):
     assert r.returncode == 2
     r = subprocess.run([sys.executable, "-m", "gcw", "preview", str(FROZEN), "--out", str(tmp_path / "n.txt")], env=_env(), capture_output=True, text=True, cwd=tmp_path)
     assert r.returncode == 0 and "no --aliases file" in r.stderr
+
+
+# ---------------------------------------------------------------- keyword list: packaged resource, fails closed
+def test_keyword_list_is_loaded_from_the_package_and_has_fined_not_fine():
+    cats = privacy.load_keywords()
+    assert "fined" in cats["legal"] and "fine" not in cats["legal"]
+    assert not privacy.sensitive_screen("Sounds fine.") and privacy.sensitive_screen("I got fined yesterday")
+    assert (ROOT / "src" / "gcw" / "data" / "sensitive_keywords.json").is_file() and not (ROOT / "config").exists()
+    assert 'gcw = ["data/*.json"]' in (ROOT / "pyproject.toml").read_text()
+
+
+def test_missing_keyword_file_fails_closed_with_a_clear_error(tmp_path, monkeypatch):
+    with pytest.raises(FileNotFoundError, match="sensitive keyword list not found"):
+        privacy.sensitive_screen("hello", tmp_path / "nope.json")
+    with pytest.raises(FileNotFoundError, match="sensitive keyword list not found"):
+        privacy.build_payload(chat([("Sam", "hello")]), al("Sam"), keywords=tmp_path / "nope.json")
+    # the packaged resource missing (a broken install) must also refuse, not return "nothing sensitive"
+    class _Gone:
+        def joinpath(self, *a):
+            return self
+
+        def read_text(self, **k):
+            raise FileNotFoundError("gone")
+
+    monkeypatch.setattr(privacy.resources, "files", lambda pkg: _Gone())
+    with pytest.raises(FileNotFoundError, match="missing from the installed package"):
+        privacy.load_keywords()
+    bad = tmp_path / "bad.json"
+    bad.write_text('{"categories": {"x": [""]}}')
+    with pytest.raises(ValueError):
+        privacy.load_keywords(bad)
+
+
+# ---------------------------------------------------------------- planted items must pass through the layer untouched
+PLANTED_KINDS = ("joke", "long_joke", "moment")
+
+
+@pytest.mark.xfail(strict=True, reason="KNOWN, awaiting the owner's decision (Phase 3a-fix item 2): the screen keyword 'party' (politics) withholds the planted moment m1, "
+                   "'the surprise party is happening this Saturday'. Remove this marker once the keyword list is decided; the target is 0 hits.")
+def test_planted_jokes_long_joke_and_moments_are_not_withheld_or_altered():
+    verify_dataset()
+    df, _ = parse_chat(FROZEN)
+    pop = privacy.messages(df).reset_index(drop=True)
+    text, counts, _ = privacy.build_payload(df, privacy.load_aliases(ROOT / "aliases.example.json"))
+    bodies = [ln.split(" | ", 3)[3] for ln in text.splitlines()]
+    index = {}
+    for i, (ts, s, t) in enumerate(zip(pop["ts"], pop["sender"], pop["text"])):
+        index.setdefault((ts.isoformat()[:16], s), []).append(i)
+    planted = [it for it in frozen_truth() if it["kind"] in PLANTED_KINDS]
+    assert len(planted) == 57
+    hit = []
+    for it in planted:
+        cands = [i for i in index[(it["timestamp"][:16], it["sender"])] if privacy.clean(pop["text"][i]) == privacy.clean(it["text"])]
+        assert len(cands) == 1, it
+        i = cands[0]
+        if bodies[i] != privacy.clean(pop["text"][i]):
+            hit.append((it["kind"], it["id"], privacy.sensitive_hits(it["text"]), bodies[i]))
+    assert hit == [], hit

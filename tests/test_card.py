@@ -178,6 +178,13 @@ def test_python_m_gcw_works_from_a_non_editable_install(tmp_path):
     assert r.returncode == 0 and "stats-card" in r.stdout, r.stderr[-300:]
     where = subprocess.run([sys.executable, "-c", "import gcw; print(gcw.__file__)"], env=env, cwd=tmp_path, capture_output=True, text=True).stdout.strip()
     assert where.startswith(str(target)), where  # really the installed copy, not src
+    # the packaged keyword list must load from the installed copy (importlib.resources), with no src and no repo config directory
+    code = ("from gcw.privacy import sensitive_screen, load_keywords; import gcw.privacy as p; "
+            "assert sensitive_screen('I need a doctor') and not sensitive_screen('Sounds fine.'); "
+            "assert 'fined' in load_keywords()['legal']; print(p.__file__)")
+    r = subprocess.run([sys.executable, "-c", code], env=env, cwd=tmp_path, capture_output=True, text=True)
+    assert r.returncode == 0 and r.stdout.strip().startswith(str(target)), r.stderr[-400:]
+    assert (target / "gcw" / "data" / "sensitive_keywords.json").is_file()
 
 
 def test_chromium_is_launched_with_disable_gpu_scale_1_and_closed():
@@ -261,7 +268,7 @@ def test_fastest_responder_hand_table_nobody_qualifies():
     assert {s: v["n"] for s, v in stats["response_time"].items()} == {"Sam": 2, "Alex": 2, "Maya": 4}
     assert card.fastest_responder(stats) is None
     t = visible_text(card.build_card_html(stats))
-    assert "Fastest responder" not in t and "Busiest weekday and hour Mon 08:00" in t  # hand table: Monday, hour 8
+    assert "Fastest responder" not in t and "Busiest slot Monday 08:00 4 messages" in t  # hand table: Monday 08:00 has rows 2-5
 
 
 def test_fastest_responder_tie_goes_to_earlier_name():
@@ -284,10 +291,10 @@ def test_fastest_responder_tile_shows_with_a_120s_gap_and_is_replaced_otherwise(
     stats, html = frozen_card
     base = {**stats, "response_time": synthetic_response_stats(120.0)["response_time"]}
     t = visible_text(card.build_card_html(base))
-    assert "Fastest responder Ann 50 replies" in t and "Busiest weekday and hour" not in t
+    assert "Fastest responder Ann 50 replies" in t and "Busiest slot" not in t
     close = {**stats, "response_time": synthetic_response_stats(60.0)["response_time"]}
     t = visible_text(card.build_card_html(close))
-    assert "Fastest responder" not in t and "Busiest weekday and hour" in t
+    assert "Fastest responder" not in t and "Busiest slot Saturday 22:00 285 messages" in t
 
 
 # ---------------------------------------------------------------- frozen chat values on the card
@@ -331,7 +338,7 @@ def test_frozen_fastest_responder_and_top_starter_from_plain_loops(frozen_card):
     tied = sorted(s for s, v in starts.items() if v == best)
     t = visible_text(html)
     assert qual[0][1] == "Riley" and qual[1][0] - qual[0][0] == 60  # first place leads by exactly 60 s: under the 120 s rule
-    assert card.fastest_responder(stats) is None and "Fastest responder" not in t and "Busiest weekday and hour" in t
+    assert card.fastest_responder(stats) is None and "Fastest responder" not in t and "Busiest slot Saturday 22:00 285 messages" in t
     assert tied == ["Maya", "Riley"] and f"Top starter {tied[0]} {best} starts, tied with {tied[1]}" in t
 
 

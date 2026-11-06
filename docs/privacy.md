@@ -3,7 +3,7 @@
 `python -m gcw preview CHAT --aliases aliases.json` prints and writes the exact text that would be sent to the model (`src/gcw/privacy.py`). It makes no API call. Pseudonymised text IS sent to Anthropic in AI mode; this layer reduces what is in it, it does not make a chat anonymous.
 
 ## Pipeline, per message (of `messages(df)`: no system lines, no deleted messages)
-1. **Sensitive screen** on the original text. A keyword hit (`config/sensitive_keywords.json`) replaces the whole message with `[withheld: sensitive]`; the id, time and sender token stay.
+1. **Sensitive screen** on the original text. A keyword hit (`src/gcw/data/sensitive_keywords.json`, packaged and loaded with `importlib.resources`; a missing file fails closed) replaces the whole message with `[withheld: sensitive]`; the id, time and sender token stay.
 2. Cleanup: NFC, invisible and bidi characters stripped (including U+2066-2069), newlines to spaces.
 3. Links (`http(s)://`, `www.`, and bare `domain.tld/...` for com, org, net, io, in, co, me, ly, app, dev; whole URL with query string) -> `[link]`; emails -> `[email]`; UPI-style `name@bank` -> `[handle]`.
 4. Dates and times are protected (ISO, d/m/y, d.m.y, 21:19, 9:05 PM). Phones (leading + or 00 with 8-15 digits, bare Indian 10-digit starting 6-9, or a separated group of 9-15 digits) -> `[phone]`.
@@ -18,9 +18,11 @@ Line format: `<id> | <YYYY-MM-DD HH:MM> | Member 3 | text` (id like m000123); me
 - Nicknames that are not in the alias file, and names in non-Latin scripts, may leak (matching is Unicode-aware, untested on real chats).
 - The screen is English keywords only. It cannot catch other languages, slang, euphemism ("the thing with my knee"), misspellings, topics with no keyword, context (replies to a sensitive message stay in) or media content. Inflections of non-stem terms are missed (`pray` matches, `praying` does not).
 - Over-redaction is deliberate: order numbers or amounts of 6+ digits become `[number]`; a missing space after a full stop can turn `ok.in` or `fine.co` into `[link]`; space-separated lists of 9+ digits look like phones.
-- The keyword list withholds many harmless messages (see the false-positive list in the Phase 3a report; `fine` alone caused 139 of 196 withheld messages on the frozen chat).
-- `config/sensitive_keywords.json` is read from the repo, not packaged: a non-editable `pip install .` has no copy.
+- The keyword list withholds many harmless messages (Phase 3a-fix removed `fine`, which alone caused 139 of 196 withheld messages, and added `fined`; `party`, `vote`, `dead` and the rest are unchanged by decision. Frozen chat now: 58 withheld = 4 planted + 54 filler, 1.13% of 5,136).
+- The keyword list ships inside the package (`gcw/data`, package-data in `pyproject.toml`); the packaging test loads it from a non-editable install with no `src` on the path. A missing file raises an error instead of skipping the screen.
 - Token estimate: bytes / 2.37, measured on the raw frozen chat (571,701 bytes, 241,311 tokens), not on the payload; too low for non-Latin scripts.
 - UNVERIFIED: that real exports wrap `@mentions` in U+2066-2069 (stripped as a precaution).
 
-Mutation pass (`.cache/tmp/mutate_privacy.py`, not committed): 24 mutations, 21 killed. Three survivors are equivalent mutants: `case_sensitive` flag ignored in the pattern (the token lookup rejects the wrong case anyway), phone minimum 8 -> 6 digits with a plus sign (the candidate regex already needs 8 digits), and the last-resort `@letter` rule (the handle rule already covers it).
+Mutation pass (`.cache/tmp/mutate_privacy.py`, not committed): 24 mutations, 23 killed. Phase 3a-fix first re-examined the 3 survivors: two were NOT equivalent (a case-sensitive full name swallowing a case-insensitive first name of another member, and a plus-sign number of 6-7 spread-out digits) and now have killing tests. The last, the last-resort `@letter` rule, is unreachable: the handle rule matches every `@` that is followed by a letter, and its matches contain no `@`; a brute-force test over all strings of length <= 5 (8-symbol alphabet) confirms it, and the 3a-fix run covered length <= 6 (299,592 strings, 0 differences).
+
+Known unresolved screen hit: the keyword `party` (politics) withholds the planted moment m1 ("the surprise party is happening this Saturday"). `tests/test_privacy.py::test_planted_jokes_long_joke_and_moments_are_not_withheld_or_altered` is marked strict xfail until the keyword list is decided.

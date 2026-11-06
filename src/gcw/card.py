@@ -84,12 +84,6 @@ def fastest_responder(stats: dict, min_samples: int = MIN_RESPONSE_SAMPLES, min_
     return {"sender": sender, "median_seconds": med, "n": n}
 
 
-def busiest_weekday_hour(stats: dict) -> tuple[str, int] | None:
-    b = stats["busiest"]
-    wd, hr = b["weekday"]["overall"], b["hour"]["overall"]
-    return None if wd is None or hr is None else (wd, hr)
-
-
 def top_starter(stats: dict) -> dict | None:
     st = stats["starters"]
     if not st or max(st.values()) == 0:
@@ -220,13 +214,13 @@ def build_card_html(stats: dict, aliases: dict[str, str] | None = None, *, date_
         tiles.append(_tile("Top starter", disp(st["sender"]), f'{st["count"]} starts{tie}'))
     else:
         tiles.append(_tile("Top starter", "n/a"))
-    bwh = busiest_weekday_hour(stats)
+    slot = stats["busiest"].get("slot")
     if fr:  # only when first place is at least 120 s ahead of second
         tiles.append(_tile("Fastest responder", disp(fr["sender"]), f'{fmt_int(fr["n"])} replies · {fmt_response(fr["median_seconds"])}'))
-    elif bwh:
-        tiles.append(_tile("Busiest weekday and hour", f"{bwh[0][:3]} {bwh[1]:02d}:00", f"{bwh[0]}, {bwh[1]:02d}:00-{bwh[1]:02d}:59"))
+    elif slot:  # one joint maximum over (weekday, hour), not the two separate maxima
+        tiles.append(_tile("Busiest slot", f'{slot["weekday"]} {slot["hour"]:02d}:00', f'{fmt_int(slot["messages"])} messages'))
     else:
-        tiles.append(_tile("Busiest weekday and hour", "n/a"))
+        tiles.append(_tile("Busiest slot", "n/a"))
 
     # one stat strip: emoji, laughs, media, links
     top_e = em["top"][0] if em["top"] else None

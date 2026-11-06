@@ -7,7 +7,7 @@
     "politics": ["vote", "voting", "voted", "election*", "party", "opposition", "politic*", "government", "democrat*", "republican*", "bjp", "congress", "parliament", "protest*", "president", "minister", "campaign"],
     "relationships": ["boyfriend", "girlfriend", "husband", "wife", "partner", "divorce*", "breakup", "break up", "dating", "crush", "affair", "cheating", "engaged", "engagement", "wedding", "marriage", "married", "ex"],
     "sexuality": ["gay", "lesbian", "bisexual", "queer", "trans", "transgender", "sexual*", "coming out"],
-    "legal": ["lawyer", "attorney", "lawsuit", "sue", "sued", "court", "arrest*", "police", "jail", "prison", "fine", "custody"],
+    "legal": ["lawyer", "attorney", "lawsuit", "sue", "sued", "court", "arrest*", "police", "jail", "prison", "fined", "custody"],
     "death_selfharm": ["died", "death", "dead", "funeral", "grief", "grieving", "suicid*", "self harm", "self-harm", "kill myself", "passed away"]
   }
 }

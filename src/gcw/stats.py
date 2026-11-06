@@ -116,6 +116,7 @@ def compute_stats(df: pd.DataFrame, since: Any = None, until: Any = None, *, min
     first_seen: dict[str, int] = {}
     emoji_group: Counter = Counter()
     per_date: Counter = Counter()
+    slots: Counter = Counter()  # (weekday index, hour): joint counts
 
     for i, (t, s, text, is_media) in enumerate(zip(ts, senders_col, texts, media)):
         h, d = int(t.hour), WEEKDAYS[int(t.weekday())]
@@ -124,6 +125,7 @@ def compute_stats(df: pd.DataFrame, since: Any = None, until: Any = None, *, min
         wd[s][d] += 1
         wd_all[d] += 1
         per_date[t.date()] += 1
+        slots[(int(t.weekday()), h)] += 1
         night[s] += h in NIGHT_HOURS
         early[s] += h in EARLY_HOURS
         if is_media:
@@ -172,6 +174,11 @@ def compute_stats(df: pd.DataFrame, since: Any = None, until: Any = None, *, min
         d0 = min(per_date, key=lambda d: (-per_date[d], d))
         busiest_date = {"date": d0.isoformat(), "messages": int(per_date[d0])}
 
+    slot = None
+    if slots:  # busiest slot = ONE joint maximum over (weekday, hour); ties go to the earlier weekday, then the earlier hour
+        wd0, h0 = min(slots, key=lambda k: (-slots[k], k))
+        slot = {"weekday": WEEKDAYS[wd0], "hour": h0, "messages": int(slots[(wd0, h0)])}
+
     def per_sender(c: Counter) -> dict[str, int]:
         return {s: int(c[s]) for s in senders}
 
@@ -186,6 +193,7 @@ def compute_stats(df: pd.DataFrame, since: Any = None, until: Any = None, *, min
         "busiest": {
             "hour": {"overall": _busiest_hour(hours_all), "per_sender": {s: _busiest_hour(hours[s]) for s in senders}},
             "weekday": {"overall": _busiest_weekday(wd_all), "per_sender": {s: _busiest_weekday(wd[s]) for s in senders}},
+            "slot": slot,
             "hour_counts": {"overall": hours_all, "per_sender": hours},
             "weekday_counts": {"overall": wd_all, "per_sender": wd},
         },
