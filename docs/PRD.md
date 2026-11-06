@@ -41,7 +41,7 @@ Date filter: messages in the last 365 days before the chat's latest message (con
 - **Conversation starter:** a message sent after a gap of >=6 hours since the previous message. Count per sender.
 - **Response time:** for each message from sender B immediately following a message from a different sender A, the delay is `t(B) - t(A)`, counted only if <=1 hour. Per sender: median of their delays.
 - **Laughs:** messages matching `\b(ha){2,}\b|lol|lmao|rofl|😂|🤣` (case-insensitive); count per sender.
-- **Emojis:** count of emoji codepoints per sender (via a fixed Unicode emoji range list); top 5 overall.
+- **Emojis:** one per grapheme cluster (UAX #29 `\X` via the `regex` module), so a heart with U+FE0F, a ZWJ family and a skin-toned thumb each count 1. A cluster is an emoji if it contains an Extended_Pictographic character (bare symbols without U+FE0F count; (c), (r), TM style symbols also count), or is a flag pair or a keycap. Per sender, total, and top 10 overall (variants with and without U+FE0F merge). Ties: higher count, then first appearance. (Phase 2a replaced the earlier codepoint-range rule and top 5.)
 - **Media:** messages that are only a media placeholder (`<Media omitted>`, `image omitted`, etc.), per sender.
 - **Links:** count of `https?://` URLs per sender.
 
@@ -100,3 +100,12 @@ VERIFIED from a real Android export (fixture `tests/fixtures/android_us_12h.txt`
 - Formats: `android_12h` is VERIFIED. `android_24h`, `ios` (12h and 24h), multi-line continuation, other separators than `/`, and non-English AM/PM are UNVERIFIED or unsupported; the report carries `format_verified` and a warning.
 - System lines are matched with anchored, configurable patterns BEFORE splitting `Sender: text` (the name part cannot contain a colon, so `Sam: I changed my mind` is a message). Deleted and media patterns are configurable; "This message was deleted" (others' deletions) is UNVERIFIED.
 - Lines are split on `\r\n`, `\n`, `\r` only (not U+2028/U+0085). The DataFrame keeps raw text; `textnorm.normalise_for_match` is for matching only and strips U+200D.
+
+### Stats behaviour (Phase 2a, `src/gcw/stats.py`)
+
+- Population: `parser.messages(df)` (no system lines, no deleted messages); media rows count as messages but not as words. A deleted message does not split a gap.
+- Window: the 365 days ending at the last non-deleted message, timestamp-based, both ends inclusive. A plain `date` for `since` means the start of that day, for `until` the end of that day (inclusive).
+- Starters: the first message of the window is not a starter (no previous message); a gap of exactly 6h counts. Response time: only the immediately previous message counts; a delay of 0 and of exactly 1h count; the median of an even count is the mean of the two middle values.
+- Ties: top talkers and night/early winners go to the higher count, then A-Z; busiest hour/weekday/date and longest silence go to the earlier one.
+- Night owl / early bird: per sender `night_share`, `early_share`, `qualifies` (>= 30 messages) and `leaning` (night, early or tie); overall winners among qualifying senders only.
+- Laughs use the regex above verbatim, so `lol|lmao|rofl` also match inside longer words (known weakness). Links count `https?://` occurrences.

@@ -20,3 +20,4 @@
 - Before any push, run `git log -p --all | grep -cE '/U[s]ers/'` and expect 0 (the `[s]` keeps this line itself from matching). The scanner only checks tracked files, so `git add -A` before running it.
 - Never pipe `pytest` or `scan_repo` into `tail`/`head`/`grep` inside a gate chain; run them unpiped so `&&` sees the exit code.
 - Stats and the AI layer read `gcw.parser.messages(df)` (no system lines, no deleted messages), never the raw `parse_chat` DataFrame.
+- Scratch files and mutation scripts go in `.cache/tmp` inside the project; never write to `/tmp` (pytest `tmp_path` is the only exception).
