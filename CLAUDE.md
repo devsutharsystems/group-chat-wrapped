@@ -17,3 +17,4 @@
 - Commits end with the Co-Authored-By line from the session attribution.
 - Spec is Prateek's, truncated at "…": build to R1–R7 in `docs/PRD.md`.
 - Commit only with `&&` after `pytest` and `scripts/scan_repo.py` both pass (e.g. `pytest && scripts/scan_repo.py && git commit ...`); never chain with `;`.
+- Before any push, run `git log -p --all | grep -cE '/U[s]ers/'` and expect 0 (the `[s]` keeps this line itself from matching). The scanner only checks tracked files, so `git add -A` before running it.

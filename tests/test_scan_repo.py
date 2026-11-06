@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,10 @@ ANDROID_NNBSP = "1/5/26, 9:15" + NN + "AM - {}: hi"
 IOS = "[05/01/26, 09:15:02] {}: hi"
 
 
+def git(root: Path, *args: str) -> None:
+    subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True)
+
+
 def make(tmp_path: Path, files: dict[str, str]) -> Path:
     (tmp_path / "tests" / "fixtures").mkdir(parents=True)
     (tmp_path / "tests/fixtures/ALLOWED_NAMES.txt").write_text("Sam\nAlex\n")
@@ -17,6 +22,8 @@ def make(tmp_path: Path, files: dict[str, str]) -> Path:
         p = tmp_path / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(body, encoding="utf-8")
+    git(tmp_path, "init", "-q")
+    git(tmp_path, "add", "-f", "-A")
     return tmp_path
 
 
@@ -94,3 +101,17 @@ def test_local_path_flagged(tmp_path):
     assert scan(make(tmp_path, {"a.md": "see " + bad}))
     assert scan(make(tmp_path / "h", {"a.md": "/" + "home" + "/someone/x"}))
     assert scan(make(tmp_path / "t", {"a.md": "see ~/proj/x and /usr/bin"})) == []
+
+
+def test_local_path_only_checked_when_tracked(tmp_path):
+    bad = "see /" + "Users" + "/" + "someone" + "/proj"
+    root = make(tmp_path / "r", {".gitignore": "secret.md\n", "ok.md": "fine"})
+    (root / "secret.md").write_text(bad)  # untracked + ignored
+    assert scan(root) == []
+    git(root, "add", "-f", "secret.md")  # now tracked
+    assert any("secret.md" in f and "local path" in f for f in scan(root))
+
+
+def test_non_git_dir_fails_closed(tmp_path):
+    with pytest.raises(RuntimeError):
+        scan(tmp_path)

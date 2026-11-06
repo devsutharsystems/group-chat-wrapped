@@ -6,11 +6,12 @@ Findings never print the matched text, only file:line and the rule, so a leak is
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
 SKIP_DIRS = {".git", ".venv", ".cache", "out", "__pycache__", ".pytest_cache", "notes", "data"}
-SKIP_FILES = {".env", ".gcw_ledger.json", "settings.local.json"}
+SKIP_FILES = {".env", ".gcw_ledger.json"}
 SPACE = "[  ]"  # plain or narrow no-break space
 ANDROID = re.compile(rf"^‎?\d{{1,2}}/\d{{1,2}}/\d{{2,4}},{SPACE}\d{{1,2}}:\d{{2}}{SPACE}?[AaPp][Mm]{SPACE}-{SPACE}(?P<name>[^:]+):")
 IOS = re.compile(r"^‎?\[\d{1,2}/\d{1,2}/\d{2,4},\s\d{1,2}:\d{2}:\d{2}(?:[  ][AaPp][Mm])?\]\s(?P<name>[^:]+):")
@@ -60,10 +61,18 @@ def scan_file(path: Path, root: Path, names: set[str]) -> list[str]:
     return out
 
 
+def tracked_files(root: Path) -> list[Path]:
+    """Files git tracks (index), so untracked/ignored files are never scanned. Fails closed outside a repo."""
+    r = subprocess.run(["git", "-C", str(root), "ls-files", "-z"], capture_output=True)
+    if r.returncode != 0:
+        raise RuntimeError(f"{root} is not a git repository; scan_repo only scans tracked files")
+    return [root / n for n in r.stdout.decode("utf-8").split("\0") if n]
+
+
 def scan(root: Path) -> list[str]:
     names = allowed_names(root)
     findings: list[str] = []
-    for p in sorted(root.rglob("*")):
+    for p in tracked_files(root):
         rel = p.relative_to(root)
         if not p.is_file() or p.name in SKIP_FILES or SKIP_DIRS & set(rel.parts[:-1]):
             continue
@@ -75,7 +84,11 @@ def scan(root: Path) -> list[str]:
 
 def main(argv: list[str]) -> int:
     root = Path(argv[1]).resolve() if len(argv) > 1 else Path(__file__).resolve().parent.parent
-    findings = scan(root)
+    try:
+        findings = scan(root)
+    except RuntimeError as e:
+        print(f"scan_repo: {e}")
+        return 2
     for f in findings:
         print(f)
     print(f"scan_repo: {len(findings)} finding(s)")
