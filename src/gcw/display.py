@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-LIMITS = {"title": 60, "summary": 140, "quote": 120, "award": 36, "award_summary": 56}
+LIMITS = {"title": 60, "summary": 72, "quote": 72, "award": 36, "award_summary": 72, "member": 20, "who": 14}
 ELLIPSIS = "…"
 FULLWIDTH_LT = chr(0xFF1C)
 _TOKEN_SHAPES = (r"(?:Member|Person|Speaker|Participant) \d+", r"P[0-9a-f]{8}_\d+")
@@ -55,7 +55,7 @@ def _quote_of(item: dict, index: dict[str, dict], names: dict[str, str]) -> dict
     row = index.get(ev[0].get("message_id", ""))
     if row is None or row["sender"] not in names:
         return None
-    return {"text": fit(detokenise(ev[0]["quote"], names), LIMITS["quote"]), "who": names[row["sender"]], "date": row["ts"].date().isoformat(),
+    return {"text": fit(detokenise(ev[0]["quote"], names), LIMITS["quote"]), "who": fit(names[row["sender"]], LIMITS["who"]), "date": row["ts"].date().isoformat(),
             "full": detokenise(ev[0]["quote"], names)}
 
 
@@ -90,5 +90,5 @@ def build_zone2(approved: dict, index: dict[str, dict], names: dict[str, str]) -
         if member is None or not _texts_ok(name, summary):
             drops += 1
             continue
-        awards.append({"award": fit(name, LIMITS["award"]), "member": member, "summary": fit(summary, LIMITS["award_summary"])})
+        awards.append({"award": fit(name, LIMITS["award"]), "member": fit(member, LIMITS["member"]), "summary": fit(summary, LIMITS["award_summary"])})
     return {"joke": joke, "moment": moment, "awards": awards, "display_drops": drops}

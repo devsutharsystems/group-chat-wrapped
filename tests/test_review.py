@@ -137,3 +137,73 @@ def test_merge_keeps_existing_statuses_and_adds_new_items_as_pending():
     merged = review.merge(rv, longer)
     assert merged["items"][ids["Cake disaster"]]["status"] == "approved" and merged["items"][ids["Cheese protocol"]]["status"] == "rejected"
     assert merged["items"][ids["Best planner"]]["status"] == "pending" and len(merged["items"]) == 4
+
+
+def _three_moments():
+    return {"running_jokes": [], "awards": [], "moments": [item("First", "m000001"), item("Second", "m000002"), item("Third", "m000003")]}
+
+
+def test_default_order_is_the_models_order_and_rank_reorders():
+    rep = _three_moments()
+    rv = review.approve_all(rep)
+    assert [m["title"] for m in review.apply(rep, rv)["moments"]] == ["First", "Second", "Third"]  # no ranks: model order, no cherry-picking
+    ids = {v["title"]: i for i, v in rv["items"].items()}
+    assert review.set_rank(rv, ids["Third"], 0) is True
+    assert [m["title"] for m in review.apply(rep, rv)["moments"]] == ["First", "Third", "Second"]  # rank 0 ties with First's default rank (its position 0): model order breaks the tie
+    review.set_rank(rv, ids["Third"], -1)
+    assert [m["title"] for m in review.apply(rep, rv)["moments"]] == ["Third", "First", "Second"]  # the model's position is the default rank
+    review.set_rank(rv, ids["Second"], -5)
+    assert [m["title"] for m in review.apply(rep, rv)["moments"]] == ["Second", "Third", "First"]
+    review.set_rank(rv, ids["Third"], None)  # clearing returns the item to its model position
+    assert [m["title"] for m in review.apply(rep, rv)["moments"]] == ["Second", "First", "Third"]
+
+
+def test_equal_ranks_fall_back_to_model_order_and_unapproved_items_never_appear():
+    rep = _three_moments()
+    rv = review.approve_all(rep)
+    ids = {v["title"]: i for i, v in rv["items"].items()}
+    for t in ("First", "Second", "Third"):
+        review.set_rank(rv, ids[t], 7)
+    assert [m["title"] for m in review.apply(rep, rv)["moments"]] == ["First", "Second", "Third"]
+    review.set_status(rv, [ids["Second"]], "rejected")
+    review.set_rank(rv, ids["Second"], -100)  # a rejected item with the best rank still never shows
+    assert [m["title"] for m in review.apply(rep, rv)["moments"]] == ["First", "Third"]
+
+
+def test_rank_validation_and_file_round_trip(tmp_path):
+    rv = review.new_review(_three_moments())
+    i = next(iter(rv["items"]))
+    assert review.set_rank(rv, "nope", 1) is False
+    for bad in ("1", 1.5, True):
+        with pytest.raises(review.ReviewError):
+            review.set_rank(rv, i, bad)
+    review.set_rank(rv, i, 3)
+    review.save_review(tmp_path / "r.json", rv)
+    assert review.load_review(tmp_path / "r.json")["items"][i]["rank"] == 3
+    data = json.loads((tmp_path / "r.json").read_text())
+    data["items"][i]["rank"] = "high"
+    (tmp_path / "bad.json").write_text(json.dumps(data))
+    with pytest.raises(review.ReviewError):
+        review.load_review(tmp_path / "bad.json")
+
+
+def test_rank_flag_in_the_review_cli(tmp_path):
+    run = tmp_path / "20260101T000000-A.json"
+    run.write_text(json.dumps({"config": "A", "messages": 1}))
+    (tmp_path / "20260101T000000-A.report.json").write_text(json.dumps(_three_moments()))
+    rf = tmp_path / "rv.json"
+    assert _run(["review", str(run), "--file", str(rf)], tmp_path).returncode == 0
+    ids = {v["title"]: i for i, v in json.loads(rf.read_text())["items"].items()}
+    r = _run(["review", str(run), "--file", str(rf), "--approve", *ids.values(), "--rank", f"{ids['Third']}=0"], tmp_path)
+    assert r.returncode == 0 and "rank 0" in r.stdout
+    assert json.loads(rf.read_text())["items"][ids["Third"]]["rank"] == 0
+    assert _run(["review", str(run), "--file", str(rf), "--rank", "bogus=1"], tmp_path).returncode == 2
+    assert _run(["review", str(run), "--file", str(rf), "--rank", f"{ids['First']}=x"], tmp_path).returncode == 2
+
+
+def test_apply_ignores_a_boolean_rank_even_in_a_hand_built_review():
+    rep = _three_moments()
+    rv = review.approve_all(rep)
+    ids = {v["title"]: i for i, v in rv["items"].items()}
+    rv["items"][ids["Third"]]["rank"] = True  # True == 1 in Python; it must not be treated as rank 1 (that would put Third before Second)
+    assert [m["title"] for m in review.apply(rep, rv)["moments"]] == ["First", "Second", "Third"]

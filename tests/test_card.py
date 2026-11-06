@@ -102,6 +102,15 @@ def assert_clean(res: dict) -> None:
     assert ov["root"] == [1080, 1080, 1350, 1350] and ov["card"] == [1080, 1350]
     assert ov["zone2"] == [984, card.ZONE2_HEIGHT] and card.ZONE2_HEIGHT == 460  # the reserved AI block, same size in every mode
     assert png_size(res["png"]) == (1080, 1350)
+    floor_ok(ov)
+
+
+def floor_ok(ov: dict) -> None:
+    """Font floor (3c-fix): every text node in Zone 2 and the footer computes to at least 20 px; summaries and quotes (classes zs, zq) at least 22 px."""
+    small = [f for f in ov["fonts"]["zone2"] + ov["fonts"]["footer"] if f["size"] < 20]
+    assert small == [], small[:5]
+    low = [f for f in ov["fonts"]["zone2"] if ("zs" in str(f["cls"]).split() or "zq" in str(f["cls"]).split()) and f["size"] < 22]
+    assert low == [], low[:5]
 
 
 # ---------------------------------------------------------------- subprocess tests FIRST

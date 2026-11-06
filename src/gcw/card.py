@@ -29,7 +29,7 @@ CHROMIUM_ARGS = ["--disable-gpu"]
 FOOTER = "Counted locally. No AI used."
 ZONE2_OFF = "AI sections off (stats-only mode)"
 ZONE2_NONE = "No AI items approved"
-AI_FOOTER_TAIL = "Quotes checked against the chat by code. Pseudonymised text was sent to Claude Haiku."
+AI_FOOTER_LINE2 = "Quotes verified by code to exist in the chat. Pseudonymised text was sent to Claude Haiku."
 
 # bidi controls and C0/C1 controls are removed from names; ZWJ and variation selectors are kept (emoji in names)
 _BIDI = {0x061C, 0x200E, 0x200F, 0x2028, 0x2029, *range(0x202A, 0x202F), *range(0x2066, 0x206A)}
@@ -145,67 +145,64 @@ h1{margin:0;font-size:44px;line-height:50px;letter-spacing:-0.5px}
 .zone2block{height:460px;flex:none;display:flex;flex-direction:column;gap:12px}
 .zone2{flex:1;border:3px dashed #c9bda8;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:25px;color:#6b6254}
 footer{height:34px;flex:none;text-align:center;font-size:22px;line-height:26px;color:#6b6254}
-footer .small{font-size:17px}
+.zone2block .zone{font-size:20px}
+footer .small{font-size:20px}
 """
 
 
 AI_CSS = """
-.z2body{height:424px;flex:none;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:256px 156px;gap:12px}
-.zc{background:#fff;border:2px solid #e6dccb;border-radius:18px;padding:10px 16px;display:flex;flex-direction:column;gap:4px;overflow:hidden}
+.z2body{height:424px;flex:none;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:252px 160px;gap:12px}
+.zc{background:#fff;border:2px solid #e6dccb;border-radius:18px;padding:8px 16px;display:flex;flex-direction:column;gap:3px;overflow:hidden}
 .zc.ph,.z2none{border:3px dashed #c9bda8;background:transparent;align-items:center;justify-content:center;font-size:22px;color:#6b6254}
 .z2none{grid-column:1 / -1;grid-row:1 / -1;border-radius:18px;display:flex;font-size:25px}
-.zc .zl{display:flex;justify-content:space-between;gap:8px;font-size:15px;line-height:18px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6b6254;flex:none}
-.zt{font-size:22px;line-height:26px;font-weight:800;color:#c2410c;flex:none}
-.zt.m{font-size:19px;line-height:23px}
-.zs{font-size:17px;line-height:21px;color:#4a4338;flex:none}
-.zq{margin-top:auto;border-left:4px solid #f3b58f;padding-left:10px;font-size:15px;line-height:19px;font-style:italic;color:#4a4338;flex:none}
-.zw{font-size:14px;line-height:17px;color:#6b6254;font-style:normal;margin-top:2px}
+.zc .zl{font-size:20px;line-height:24px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6b6254;flex:none}
+.zt{font-size:24px;line-height:28px;font-weight:800;color:#c2410c;flex:none}
+.zs{font-size:22px;line-height:27px;color:#4a4338;flex:none}
+.zq{border-left:4px solid #f3b58f;padding-left:10px;font-size:22px;line-height:27px;font-style:italic;color:#4a4338;flex:none}
+.zw{font-size:20px;line-height:24px;color:#6b6254;font-style:normal;white-space:nowrap}
 .za .zt{font-size:20px;line-height:24px}
-.zm{font-size:19px;line-height:23px;font-weight:700;color:#4a4338;flex:none}
-.zm.s{font-size:15px;line-height:19px}
-.za .zs{font-size:15px;line-height:19px}
-footer.ai{margin:0 -40px;white-space:nowrap;font-size:15px}
-footer.ai.f14{font-size:14px}
-footer.ai.f13{font-size:13px}
+.zm{font-size:22px;line-height:26px;font-weight:700;color:#4a4338;flex:none}
+footer.ai{height:52px;margin:0 -40px;white-space:nowrap;font-size:20px;line-height:24px}
 """
 
 
-def _zc(label: str, body: str, extra: str = "", cls: str = "") -> str:
-    return f'<div class="zc {cls}"><div class="zl"><span>{esc(label)}</span><span>{esc(extra)}</span></div>{body}</div>'
+def _zc(label: str, body: str, cls: str = "") -> str:
+    return f'<div class="zc {cls}"><div class="zl">{esc(label)}</div>{body}</div>'
 
 
 def _zone2_ai(z: dict) -> str:
-    """Zone 2 body for AI mode: a fixed 2x2 grid (rows 250 + 162, 12 px gaps = 424 px). Missing cells are dashed placeholders."""
+    """Zone 2 body for AI mode: a fixed 2x2 grid (rows 252 + 160, 12 px gap = 424 px). Missing cells are dashed placeholders.
+    Every text is at least 20 px (summaries and quotes 22 px): long texts are truncated by display.py, never shrunk."""
     if z["approved"] == 0:
         return f'<div class="z2body"><div class="z2none">{esc(ZONE2_NONE)}</div></div>'
     d = z["zone2"]
 
-    def story(label: str, c: dict | None, with_date: bool) -> str:
+    def story(label: str, c: dict | None) -> str:
         if c is None:
             return f'<div class="zc ph">{esc("none approved")}</div>'
-        body = (f'<div class="zt name {"m" if len(c["title"]) > 34 else ""}">{esc(c["title"])}</div><div class="zs name">{esc(c["summary"])}</div>'
+        body = (f'<div class="zt name">{esc(c["title"])}</div><div class="zs name">{esc(c["summary"])}</div>'
                 f'<div class="zq name">{esc(chr(0x201C) + c["quote"] + chr(0x201D))}<div class="zw">{esc(chr(0x2014) + " " + c["who"] + ", " + c["date"])}</div></div>')
-        return _zc(label, body, c["date"] if with_date else "")
+        return _zc(label, body)
 
     def award(a: dict | None) -> str:
         if a is None:
             return f'<div class="zc ph">{esc("none approved")}</div>'
-        body = (f'<div class="zt name">{esc(a["award"])}</div><div class="zm name {"s" if len(a["member"]) > 18 else ""}">{esc(a["member"])}</div>'
-                f'<div class="zs name">{esc(a["summary"])}</div>')
-        return _zc("Award", body, cls="za")
+        body = f'<div class="zt name">{esc(a["award"])}</div><div class="zm name">{esc(a["member"])}</div><div class="zs name">{esc(a["summary"])}</div>'
+        return _zc("Award", body, "za")
 
     aw = d["awards"] + [None] * (2 - len(d["awards"]))
-    return f'<div class="z2body">{story("Running joke", d["joke"], False)}{story("Moment", d["moment"], True)}{award(aw[0])}{award(aw[1])}</div>'
+    return f'<div class="z2body">{story("Running joke", d["joke"])}{story("Moment", d["moment"])}{award(aw[0])}{award(aw[1])}</div>'
 
 
 def ai_footer(z: dict, date_note: str | None) -> tuple[str, str]:
-    """(text, css class) for the one-line AI footer. The size steps down with length; a date note is dropped first if it would not fit."""
-    word = "synthetic demo, auto-approved" if z.get("synthetic") else "approved"
-    text = f'AI proposed {z["proposed"]}, {z["verified"]} verified, {z["approved"]} {word}. {AI_FOOTER_TAIL}'
-    if date_note and len(text) + len(date_note) + 3 <= 160:
-        text += f" \u00b7 {date_note}"
-    n = len(text)
-    return text, "ai" if n <= 128 else "ai f14" if n <= 146 else "ai f13"
+    """The two AI footer lines (20 px each). Line 1 carries N proposed, M kept after verification, K approved; a date note is appended to
+    line 1 only if it still fits (about 100 characters)."""
+    n, m, k = z["proposed"], z["verified"], z["approved"]
+    tail = "all auto-approved (synthetic demo)" if z.get("synthetic") else f"{k} approved in review"
+    line1 = f"AI proposed {n} \u00b7 {m} verified by code \u00b7 {tail}"
+    if date_note and len(line1) + len(date_note) + 3 <= 100:
+        line1 += f" \u00b7 {date_note}"
+    return line1, AI_FOOTER_LINE2
 
 
 def _vc(text: str) -> str:
@@ -305,8 +302,8 @@ def build_card_html(stats: dict, aliases: dict[str, str] | None = None, *, date_
     if ai is not None:  # AI mode: Zone 2 content and the AI footer; Zone 1 is untouched
         css = CSS + AI_CSS
         zone2 = _zone2_ai(ai)
-        ftext, fcls = ai_footer(ai, date_note)
-        footer = f'<footer class="{fcls}">{esc(ftext)}</footer>'
+        l1, l2 = ai_footer(ai, date_note)
+        footer = f'<footer class="ai"><div>{esc(l1)}</div><div>{esc(l2)}</div></footer>'
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; img-src data:\">"
@@ -352,7 +349,17 @@ _MEASURE_JS = """() => {
   const de = document.documentElement;
   const z2 = document.querySelector('.zone2block');
   const zr = z2 ? z2.getBoundingClientRect() : {width: 0, height: 0};
-  return {bad, root: [de.scrollWidth, de.clientWidth, de.scrollHeight, de.clientHeight], card: [Math.round(c.width), Math.round(c.height)], zone2: [zr.width, zr.height]};
+  const fonts = {zone2: [], footer: [], zone1: []};
+  const walker = document.createTreeWalker(card || document.body, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walker.nextNode())) {
+    const t = node.data.trim();
+    if (!t || !node.parentElement) continue;
+    const el = node.parentElement;
+    const where = el.closest('footer') ? 'footer' : el.closest('.zone2block') ? 'zone2' : 'zone1';
+    fonts[where].push({size: parseFloat(getComputedStyle(el).fontSize), cls: el.className || el.tagName.toLowerCase(), text: t.slice(0, 40)});
+  }
+  return {fonts, bad, root: [de.scrollWidth, de.clientWidth, de.scrollHeight, de.clientHeight], card: [Math.round(c.width), Math.round(c.height)], zone2: [zr.width, zr.height]};
 }"""
 
 

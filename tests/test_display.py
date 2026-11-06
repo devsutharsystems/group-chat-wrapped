@@ -53,7 +53,7 @@ def test_fit_cuts_at_a_word_boundary_with_an_ellipsis():
 
 
 def test_every_field_limit():
-    assert display.LIMITS == {"title": 60, "summary": 140, "quote": 120, "award": 36, "award_summary": 56}
+    assert display.LIMITS == {"title": 60, "summary": 72, "quote": 72, "award": 36, "award_summary": 72, "member": 20, "who": 14}
 
 
 def _row(sender, day="2026-01-05"):
@@ -110,8 +110,8 @@ def test_displayed_texts_are_cut_to_their_limits_at_word_boundaries():
     a = _approved(running_jokes=[{"title": long, "summary": long, "evidence": [{"message_id": "m000001", "quote": long}]}],
                   awards=[{"award": long, "member": "Member 2", "summary": long, "evidence": []}])
     z = display.build_zone2(a, INDEX, NAMES)
-    assert len(z["joke"]["title"]) <= 60 and len(z["joke"]["summary"]) <= 140 and len(z["joke"]["quote"]) <= 120
-    assert len(z["awards"][0]["award"]) <= 36 and len(z["awards"][0]["summary"]) <= 56
+    assert len(z["joke"]["title"]) <= 60 and len(z["joke"]["summary"]) <= 72 and len(z["joke"]["quote"]) <= 72
+    assert len(z["awards"][0]["award"]) <= 36 and len(z["awards"][0]["summary"]) <= 72
     for t in (z["joke"]["title"], z["joke"]["summary"], z["joke"]["quote"], z["awards"][0]["summary"]):
         assert t.endswith("…") and not t[:-1].endswith(" ") and t[:-1].split(" ")[-1] == "wordy"  # whole words only
 
@@ -126,7 +126,7 @@ def test_the_displayed_quote_is_a_prefix_of_the_verified_quote_after_detokenisin
         z = display.build_zone2(_approved(running_jokes=[{"title": "t", "summary": "s", "evidence": [{"message_id": "m000001", "quote": quote}]}]), idx, names)
         full = " ".join(display.detokenise(quote, names).split())
         shown = z["joke"]["quote"]
-        assert shown.removesuffix("…") == full[: len(shown.removesuffix("…"))] and len(shown) <= 120
+        assert shown.removesuffix("…") == full[: len(shown.removesuffix("…"))] and len(shown) <= 72
         assert shown == full or shown.endswith("…")
 
 
@@ -163,3 +163,12 @@ def test_token_order_is_irrelevant_given_the_digit_boundary_brute_force():
             assert [m.group() for m in longest.finditer(s)] == [m.group() for m in shortest.finditer(s)], s
             n += 1
     assert n == sum(6 ** k for k in range(1, 6))
+
+
+def test_sender_and_member_names_are_cut_for_display_only():
+    long = "Alexandria Bartholomew-Smythe!"
+    names = {"Member 1": long, "Member 2": "Maya", "Member 3": "Kai"}
+    z = display.build_zone2(_approved(awards=[{"award": "Best", "member": "Member 1", "summary": "s", "evidence": []}]), INDEX, names)
+    assert len(z["awards"][0]["member"]) <= 20 and z["awards"][0]["member"].endswith("\u2026")
+    assert len(z["joke"]["who"]) <= 14 and z["joke"]["who"].endswith("\u2026")  # the quote's sender (Member 1) is long
+    assert names["Member 1"] == long  # the mapping itself is untouched

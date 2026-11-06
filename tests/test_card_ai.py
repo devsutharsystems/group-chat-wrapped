@@ -17,7 +17,7 @@ from gcw.stats import compute_stats
 from test_card import ROOT, assert_clean, busy_frame, parsed, png_size, visible_text
 from test_privacy import FROZEN, al
 
-STATS_ONLY_SHA = "849cbac7a6c40865543c4648cdcc2e3265bd50e233a781236f40eb1f8a4cbcab"
+STATS_ONLY_SHA = "1ec0348ee2c7df195c90de23c417cc993ecac7710957304e8dd111032279fc5f"
 LONG30 = "Alexandria Bartholomew-Smythe!"
 assert len(LONG30) == 30
 
@@ -55,7 +55,8 @@ def render_ai(browser, ai: dict, stats=None, **kw):
 
 def check(res):
     assert_clean(res)
-    assert res["probe"]["grid"] == 424 and res["probe"]["footLines"] == 1
+    assert res["probe"]["grid"] == 424 and res["probe"]["footLines"] == 2 and res["probe"]["foot"] == 52
+    assert res["overflow"]["fonts"]["footer"] and res["overflow"]["fonts"]["zone2"]
 
 
 # ---------------------------------------------------------------- the stats-only card is unchanged
@@ -63,7 +64,7 @@ def test_stats_only_html_is_unchanged_and_has_no_ai_markup():
     verify_dataset()
     df, _ = parse_chat(FROZEN)
     html = card.build_card_html(compute_stats(df))
-    assert hashlib.sha256(html.encode()).hexdigest() == STATS_ONLY_SHA, "Zone 1 / the stats-only card changed (update the pin only on purpose)"
+    assert hashlib.sha256(html.encode()).hexdigest() == STATS_ONLY_SHA, "the stats-only card changed (update the pin only on purpose; 3c-fix changed only the Zone 2 heading size and the date-note size in the CSS)"
     assert "z2body" not in html and card.FOOTER in html and card.ZONE2_OFF in html and card.build_card_html(compute_stats(df), ai=None) == html
 
 
@@ -116,21 +117,43 @@ def test_twelve_members_and_a_script_title(browser):
 def test_footer_wording_and_one_line(browser):
     res = render_ai(browser, zone(4))
     check(res)
-    assert visible_text(res["html"]).endswith("AI proposed 13, 12 verified, 4 approved. Quotes checked against the chat by code. Pseudonymised text was sent to Claude Haiku.")
+    assert visible_text(res["html"]).endswith("AI proposed 13 \u00b7 12 verified by code \u00b7 4 approved in review Quotes verified by code to exist in the chat. Pseudonymised text was sent to Claude Haiku.")
     syn = {**zone(4), "synthetic": True}
     res = render_ai(browser, syn)
     check(res)
-    assert visible_text(res["html"]).endswith("AI proposed 13, 12 verified, 4 synthetic demo, auto-approved. Quotes checked against the chat by code. Pseudonymised text was sent to Claude Haiku.")
+    assert visible_text(res["html"]).endswith("AI proposed 13 \u00b7 12 verified by code \u00b7 all auto-approved (synthetic demo) Quotes verified by code to exist in the chat. Pseudonymised text was sent to Claude Haiku.")
     big = {**syn, "proposed": 123456, "verified": 123456, "approved": 123456}
     check(render_ai(browser, big, date_note="Dates read as m/d (assumed)"))
 
 
-@pytest.mark.parametrize("n, date_note, cls", [(13, None, "ai f14"), (13, "Dates read as m/d (assumed)", "ai f14")])
-def test_footer_size_steps_and_date_note_rule(n, date_note, cls):
-    text, c = card.ai_footer({"proposed": n, "verified": n, "approved": n, "synthetic": False}, date_note)
-    assert c in ("ai", "ai f14", "ai f13") and len(text) <= 175
-    long_syn = card.ai_footer({"proposed": 1, "verified": 1, "approved": 1, "synthetic": True}, "x" * 80)[0]
-    assert "xxxx" not in long_syn  # a date note that would not fit is dropped first
+def test_footer_lines_and_the_date_note_rule():
+    l1, l2 = card.ai_footer({"proposed": 13, "verified": 12, "approved": 4, "synthetic": False}, None)
+    assert l1 == "AI proposed 13 \u00b7 12 verified by code \u00b7 4 approved in review"
+    assert l2 == "Quotes verified by code to exist in the chat. Pseudonymised text was sent to Claude Haiku."
+    assert card.ai_footer({"proposed": 13, "verified": 12, "approved": 4, "synthetic": False}, "Dates read as m/d (assumed)")[0] == l1 + " \u00b7 Dates read as m/d (assumed)"
+    syn = card.ai_footer({"proposed": 1, "verified": 1, "approved": 1, "synthetic": True}, "x" * 80)[0]
+    assert syn == "AI proposed 1 \u00b7 1 verified by code \u00b7 all auto-approved (synthetic demo)"  # a date note that would not fit is dropped
+
+
+def test_zone2_text_is_never_below_the_floor_in_stats_only_mode_either(browser):
+    stats = compute_stats(busy_frame(["Sam", "Alex", "Maya"]))
+    res = card.render_png(card.build_card_html(stats, date_note="Dates read as m/d (assumed)"), browser=browser, measure=True)
+    assert_clean(res)  # includes the floor check on Zone 2 and the footer, date note included
+
+
+def test_moment_date_appears_once_in_the_attribution_and_not_in_the_label(browser):
+    res = render_ai(browser, zone(2))
+    check(res)
+    assert res["html"].count("2026-01-05") == 2  # the joke's and the moment's attribution, nothing else
+    assert re.search(r'<div class="zl">Moment</div>', res["html"]) and 'class="zl"><span' not in res["html"]
+
+
+def test_smallest_zone1_font_is_reported_not_changed(browser, capsys):
+    res = render_ai(browser, zone(4))
+    z1 = min(res["overflow"]["fonts"]["zone1"], key=lambda f: f["size"])
+    with capsys.disabled():
+        print(f"\n[zone1] smallest computed font: {z1['size']} px on class {z1['cls']!r} ({z1['text']!r})")
+    assert z1["size"] > 0
 
 
 # ---------------------------------------------------------------- the commands (in-process; renders reuse the session browser)
@@ -172,7 +195,7 @@ def test_only_approved_items_render_pending_and_rejected_never(world, capsys):
     t = visible_text(html)
     assert "Cheese protocol" in t and "Cake disaster" in t and "Best planner" in t and "PENDING MOMENT" not in html and "REJECTED AWARD" not in html and "never shown" not in html
     assert "Sammy S." in t and "Kai" in t and not re.search(r"Member \d+", t)  # tokens mapped to the alias display names
-    assert t.endswith("AI proposed 6, 5 verified, 3 approved. Quotes checked against the chat by code. Pseudonymised text was sent to Claude Haiku.")
+    assert t.endswith("AI proposed 6 \u00b7 5 verified by code \u00b7 3 approved in review Quotes verified by code to exist in the chat. Pseudonymised text was sent to Claude Haiku.")
     assert png_size((world.tmp / "o.png").read_bytes()) == (1080, 1350)
 
 
@@ -196,7 +219,7 @@ def test_auto_approve_works_on_the_frozen_chat_and_says_so_in_the_footer(world, 
     rc = cli.main(["card", str(FROZEN), "--aliases", str(ROOT / "aliases.example.json"), "--report", str(run), "--auto-approve-synthetic", "--until", "2026-02-08", "--out", str(out), "--html", str(html)])
     assert rc == 0
     t = visible_text(html.read_text())
-    assert "AI proposed 2, 2 verified, 1 synthetic demo, auto-approved." in t and "Cake disaster" in t and not re.search(r"Member \d+", t)
+    assert "AI proposed 2 \u00b7 2 verified by code \u00b7 all auto-approved (synthetic demo)" in t and "Cake disaster" in t and not re.search(r"Member \d+", t)
     assert png_size(out.read_bytes()) == (1080, 1350)
 
 
@@ -211,7 +234,7 @@ def test_slice_end_is_derived_for_logs_without_a_slice_field(world, capsys):
     del log["slice"]
     world.run.write_text(json.dumps(log))
     assert cli.main(card_args(world, "--report", str(world.run))) == 0
-    assert "derived from the message count (4)" in capsys.readouterr().err
+    assert "warning: the run log has no slice field, so the slice end was derived from its message count (4)" in capsys.readouterr().err
     log["messages"] = 3
     world.run.write_text(json.dumps(log))
     assert cli.main(card_args(world, "--report", str(world.run))) == 3

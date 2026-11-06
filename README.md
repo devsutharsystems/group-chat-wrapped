@@ -47,3 +47,5 @@ Copy `aliases.example.json` to `aliases.json` (gitignored) to show display names
 3. `python -m gcw card CHAT --aliases aliases.json --report out/runs/<run>.json --review out/reviews/<run>.json --until YYYY-MM-DD --out out/card.png` renders Zone 1 (counted stats) plus Zone 2 (approved items, names shown instead of Member tokens). `--until` must equal the analysed slice's end. `--auto-approve-synthetic` exists only for the frozen synthetic chat and says so in the footer.
 
 Configs B and C leave the `thinking` parameter out (the API default is adaptive thinking), but the model used zero thinking tokens in every slice run, so they differ from A only through the effort setting; do not read them as "thinking enabled".
+
+The card's AI text is built for phone feeds: every text in Zone 2 and the footer is at least 20 px (summaries and quotes 22 px), so long titles, summaries and quotes are truncated with an ellipsis on the card (the verified text is untouched). `review --rank ID=N` reorders items of a type; with no ranks the model's order is used.

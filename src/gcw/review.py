@@ -61,15 +61,38 @@ def merge(review: dict, report: dict) -> dict:
     return review
 
 
+def _rank_of(meta: dict, pos: int) -> int:
+    r = meta.get("rank")
+    return r if isinstance(r, int) and not isinstance(r, bool) else pos  # no rank: the model's own order
+
+
 def apply(report: dict, review: dict | None) -> dict:
-    """The approved report: only items whose id has status `approved`. Unknown or missing ids are pending, so they never appear."""
+    """The approved report: only items whose id has status `approved`, sorted by rank then model order. An item without a rank uses its position in
+    the model's order as its rank, so with no ranks at all the order is exactly the model's (no cherry-picking). Unknown or missing ids are pending
+    and never appear."""
     items = (review or {}).get("items", {})
     out: dict[str, list] = {t: [] for t in TYPES}
     for typ in TYPES:
-        for it in report.get(typ) or []:
-            if items.get(item_id(typ, it), {}).get("status") == "approved":
-                out[typ].append(it)
+        picked = []
+        for pos, it in enumerate(report.get(typ) or []):
+            meta = items.get(item_id(typ, it), {})
+            if meta.get("status") == "approved":
+                picked.append(((_rank_of(meta, pos), pos), it))
+        out[typ] = [it for _, it in sorted(picked, key=lambda x: x[0])]
     return out
+
+
+def set_rank(review: dict, item: str, rank: int | None) -> bool:
+    """Set (or clear, with None) the optional integer rank of an item; returns False if the id is unknown. Lower rank shows first."""
+    if item not in review["items"]:
+        return False
+    if rank is None:
+        review["items"][item].pop("rank", None)
+    elif isinstance(rank, int) and not isinstance(rank, bool):
+        review["items"][item]["rank"] = rank
+    else:
+        raise ReviewError(f"rank must be an integer, got {rank!r}")
+    return True
 
 
 def approve_all(report: dict, run: str = "") -> dict:
@@ -86,8 +109,8 @@ def load_review(path: str | Path) -> dict:
     except (OSError, ValueError) as e:
         raise ReviewError(f"cannot read review file {path}: {e}") from e
     items = data.get("items") if isinstance(data, dict) else None
-    if not isinstance(items, dict) or any(not isinstance(v, dict) or v.get("status") not in STATUSES for v in items.values()):
-        raise ReviewError(f"review file {path} is malformed (items must map ids to a status in {STATUSES})")
+    if not isinstance(items, dict) or any(not isinstance(v, dict) or v.get("status") not in STATUSES or ("rank" in v and (not isinstance(v["rank"], int) or isinstance(v["rank"], bool))) for v in items.values()):
+        raise ReviewError(f"review file {path} is malformed (items must map ids to a status in {STATUSES}; an optional rank must be an integer)")
     return data
 
 

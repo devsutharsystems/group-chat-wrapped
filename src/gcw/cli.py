@@ -60,6 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
     rv.add_argument("--file", help="review file (default out/reviews/<run>.json)")
     rv.add_argument("--approve", nargs="*", default=[], metavar="ID")
     rv.add_argument("--reject", nargs="*", default=[], metavar="ID")
+    rv.add_argument("--rank", nargs="*", default=[], metavar="ID=N", help="optional integer rank per item (lower shows first; default is the model's order)")
     return ap
 
 
@@ -98,9 +99,17 @@ def review_cmd(args: argparse.Namespace) -> int:
     if missing:
         print(f"gcw: unknown item ids: {', '.join(missing)}", file=sys.stderr)
         return 2
+    for spec in args.rank:
+        i, _, n = spec.partition("=")
+        if not n.lstrip("-").isdigit():
+            print(f"gcw: bad --rank {spec!r} (expected ID=INTEGER)", file=sys.stderr)
+            return 2
+        if not review.set_rank(rv, i, int(n)):
+            print(f"gcw: unknown item ids: {i}", file=sys.stderr)
+            return 2
     review.save_review(path, rv)
     for i, v in rv["items"].items():
-        print(f"{i}  {v['status']:<8}  {v['type']:<13}  {v['title']}")
+        print(f"{i}  {v['status']:<8}  {v['type']:<13}  {('rank ' + str(v['rank'])) if 'rank' in v else '':<8}  {v['title']}")
     print(f"review file: {path}  {review.counts(report, rv)}")
     return 0
 
@@ -161,7 +170,7 @@ def card_cmd(args: argparse.Namespace) -> int:
             if n != log.get("messages") or args.since:
                 print(f"gcw: the run recorded {log.get('messages')} messages but chat start..{args.until} has {n}: stats and AI must cover the same window", file=sys.stderr)
                 return 3
-            print(f"gcw: note: the run log has no slice field; slice end derived from the message count ({n})", file=sys.stderr)
+            print(f"gcw: warning: the run log has no slice field, so the slice end was derived from its message count ({n}); runs made with the current code record the slice", file=sys.stderr)
         try:
             prep = analyze.prepare(df, aliases_obj, slice_start=args.since, slice_end=args.until)
         except analyze.AnalysisError as e:
