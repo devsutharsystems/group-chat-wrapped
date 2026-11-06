@@ -1,0 +1,17 @@
+# secrets
+.env
+.env.*
+# environments and caches
+.venv/
+.cache/
+__pycache__/
+.pytest_cache/
+# outputs and private data
+out/
+data/real/
+*.zip
+_chat.txt
+WhatsApp Chat*.txt
+.gcw_ledger.json
+notes/
+.DS_Store
