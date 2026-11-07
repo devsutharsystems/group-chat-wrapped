@@ -261,3 +261,31 @@ def test_review_and_auto_approve_are_mutually_exclusive(world):
     with pytest.raises(SystemExit) as e:
         cli.main(card_args(world, "--report", str(world.run), "--review", "x.json", "--auto-approve-synthetic"))
     assert e.value.code == 2
+
+
+def test_award_name_is_at_least_as_large_as_the_member_name_and_summaries_use_three_lines(browser):
+    res = render_ai(browser, zone(4))
+    check(res)
+    r = card.render_png(res["html"], browser=browser, measure=True,
+                        probe="({name: [...document.querySelectorAll('.za .zt')].map(e => parseFloat(getComputedStyle(e).fontSize)), "
+                              "member: [...document.querySelectorAll('.za .zm')].map(e => parseFloat(getComputedStyle(e).fontSize)), "
+                              "weight: [...document.querySelectorAll('.za .zt')].map(e => getComputedStyle(e).fontWeight)})")
+    assert r["probe"]["name"] == [22, 22] and r["probe"]["member"] == [20, 20] and all(w in ("700", "800", "bold") for w in r["probe"]["weight"])
+
+
+def test_three_line_summary_and_two_line_quote_fit_with_a_one_line_title(browser):
+    summary = " ".join(["Whatever"] * 30)  # cut to the limit: about three lines at 22 px
+    quote = " ".join(["wonderful"] * 40)  # cut to the limit: two lines
+    ai = zone(2, joke=mkitem("A title within thirty", summary, quote), moment=mkitem("Another short title", summary, quote, "m000002"))
+    res = render_ai(browser, ai)
+    check(res)
+    r = card.render_png(res["html"], browser=browser, measure=True,
+                        probe="[...document.querySelectorAll('.zs')].slice(0, 2).map(e => Math.round(e.getBoundingClientRect().height / 27))")
+    assert r["probe"] == [3, 3]
+
+
+def test_a_long_title_is_cut_to_one_line_so_the_three_line_summary_still_fits(browser):
+    long_title = "A very long title that the model wrote for this joke"
+    res = render_ai(browser, zone(2, joke=mkitem(long_title, " ".join(["Whatever"] * 30)), moment=mkitem(long_title, " ".join(["Whatever"] * 30), "reminder: cheese protocol is in effect", "m000002")))
+    check(res)
+    assert long_title not in res["html"] and "\u2026" in res["html"]

@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-LIMITS = {"title": 60, "summary": 72, "quote": 72, "award": 36, "award_summary": 72, "member": 20, "who": 14}
+LIMITS = {"title": 32, "summary": 110, "quote": 72, "award": 36, "award_summary": 72, "member": 20, "who": 14}
 ELLIPSIS = "…"
 FULLWIDTH_LT = chr(0xFF1C)
 _TOKEN_SHAPES = (r"(?:Member|Person|Speaker|Participant) \d+", r"P[0-9a-f]{8}_\d+")
@@ -48,6 +48,20 @@ def fit(text: str, limit: int) -> str:
     return cut.rstrip(" ,;:-–—") + ELLIPSIS
 
 
+def fit_summary(text: str, limit: int) -> str:
+    """Summaries (3 lines on the card): whole text if it fits; otherwise cut at the last SENTENCE END ('.', '!' or '?' followed by a space) that lies
+    within the limit and keeps at least 40% of it; otherwise at a word boundary with an ellipsis (as fit). The result is always a prefix of the
+    whitespace-normalised text."""
+    t = " ".join(str(text).split())
+    if len(t) <= limit:
+        return t
+    ends = [m.end() - 1 for m in re.finditer(r"[.!?](?= )", t[: limit + 1])]  # index of the punctuation mark
+    best = max((i for i in ends if i + 1 <= limit), default=None)
+    if best is not None and best + 1 >= 0.4 * limit:
+        return t[: best + 1]
+    return fit(t, limit)
+
+
 def _quote_of(item: dict, index: dict[str, dict], names: dict[str, str]) -> dict | None:
     ev = item.get("evidence") or []
     if not ev:
@@ -76,7 +90,7 @@ def build_zone2(approved: dict, index: dict[str, dict], names: dict[str, str]) -
             if q is None or not _texts_ok(title, summary, q["full"], q["who"]):
                 drops += 1
                 continue
-            card = {"title": fit(title, LIMITS["title"]), "summary": fit(summary, LIMITS["summary"]), "quote": q["text"], "who": q["who"], "date": q["date"]}
+            card = {"title": fit(title, LIMITS["title"]), "summary": fit_summary(summary, LIMITS["summary"]), "quote": q["text"], "who": q["who"], "date": q["date"]}
             if typ == "running_jokes":
                 joke = card
             else:

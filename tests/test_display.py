@@ -53,7 +53,7 @@ def test_fit_cuts_at_a_word_boundary_with_an_ellipsis():
 
 
 def test_every_field_limit():
-    assert display.LIMITS == {"title": 60, "summary": 72, "quote": 72, "award": 36, "award_summary": 72, "member": 20, "who": 14}
+    assert display.LIMITS == {"title": 32, "summary": 110, "quote": 72, "award": 36, "award_summary": 72, "member": 20, "who": 14}
 
 
 def _row(sender, day="2026-01-05"):
@@ -110,7 +110,7 @@ def test_displayed_texts_are_cut_to_their_limits_at_word_boundaries():
     a = _approved(running_jokes=[{"title": long, "summary": long, "evidence": [{"message_id": "m000001", "quote": long}]}],
                   awards=[{"award": long, "member": "Member 2", "summary": long, "evidence": []}])
     z = display.build_zone2(a, INDEX, NAMES)
-    assert len(z["joke"]["title"]) <= 60 and len(z["joke"]["summary"]) <= 72 and len(z["joke"]["quote"]) <= 72
+    assert len(z["joke"]["title"]) <= 32 and len(z["joke"]["summary"]) <= 110 and len(z["joke"]["quote"]) <= 72
     assert len(z["awards"][0]["award"]) <= 36 and len(z["awards"][0]["summary"]) <= 72
     for t in (z["joke"]["title"], z["joke"]["summary"], z["joke"]["quote"], z["awards"][0]["summary"]):
         assert t.endswith("…") and not t[:-1].endswith(" ") and t[:-1].split(" ")[-1] == "wordy"  # whole words only
@@ -172,3 +172,57 @@ def test_sender_and_member_names_are_cut_for_display_only():
     assert len(z["awards"][0]["member"]) <= 20 and z["awards"][0]["member"].endswith("\u2026")
     assert len(z["joke"]["who"]) <= 14 and z["joke"]["who"].endswith("\u2026")  # the quote's sender (Member 1) is long
     assert names["Member 1"] == long  # the mapping itself is untouched
+
+
+SUMMARY = ("The group keeps invoking the cheese protocol in unrelated plans. It started on a Tuesday and returned every week after that, "
+           "usually right when someone proposed lunch.")  # 3 sentences
+
+
+def test_summary_longer_than_the_limit_is_a_prefix_of_the_verified_text_plus_an_ellipsis():
+    long = " ".join(["wordy"] * 80)
+    out = display.fit_summary(long, 110)
+    assert out.endswith("\u2026") and len(out) <= 110 and " ".join(long.split()).startswith(out[:-1]) and not out[:-1].endswith(" ")
+    z = display.build_zone2(_approved(running_jokes=[{"title": "t", "summary": long, "evidence": [{"message_id": "m000001", "quote": "reminder: cheese protocol"}]}]), INDEX, NAMES)
+    assert z["joke"]["summary"] == out  # the card shows exactly this
+
+
+def test_summary_is_cut_at_a_sentence_end_when_one_fits():
+    out = display.fit_summary(SUMMARY, 110)
+    assert out == "The group keeps invoking the cheese protocol in unrelated plans." and SUMMARY.startswith(out)  # no ellipsis: a complete sentence
+    two = display.fit_summary(SUMMARY, 140)  # the second sentence ends at 125 characters
+    assert two.endswith("returned every week after that,") is False and SUMMARY.startswith(two) and len(two) <= 140
+
+
+def test_summary_sentence_end_must_keep_at_least_40_percent_of_the_limit():
+    t = "Hi. " + "word " * 40  # the only sentence end is at 3 characters: far too short, so a word-boundary cut with an ellipsis is used
+    out = display.fit_summary(t, 110)
+    assert out.endswith("\u2026") and out.startswith("Hi. word") and len(out) <= 110
+
+
+@pytest.mark.parametrize("text, limit, want", [
+    ("short text.", 110, "short text."),
+    ("one. two. three. four. five.", 20, "one. two. three."),
+    ("no sentence end in this fairly long run of words that keeps on going", 30, "no sentence end in this\u2026"),
+    ("Is it? Yes! " + "x " * 60, 40, "Is it? Yes!"),  # '?' and '!' count as sentence ends; 11 characters is under 40% of 40 (16), so see the next case
+    ("Is it? Yes! No. " + "x " * 60, 40, "Is it? Yes! No."),  # 15 characters: still under 16, so a word cut applies
+    ("Is it? Yes! No way. Really. " + "x " * 60, 40, "Is it? Yes! No way. Really."),  # 27 characters >= 16: the last sentence end within 40 is used
+])
+def test_fit_summary_cases(text, limit, want):
+    out = display.fit_summary(text, limit)
+    assert " ".join(text.split()).startswith(out.removesuffix("\u2026")) and len(out) <= limit
+    if text == "Is it? Yes! " + "x " * 60 or text == "Is it? Yes! No. " + "x " * 60:
+        assert out.endswith("\u2026")  # the only sentence ends are below 40% of the limit: a word-boundary cut with an ellipsis
+    else:
+        assert out == want
+
+
+def test_summary_that_fits_is_untouched_apart_from_whitespace():
+    assert display.fit_summary("  A  short\n summary. ", 110) == "A short summary."
+
+
+def test_zone2_story_summaries_use_the_sentence_end_rule_but_award_summaries_do_not():
+    a = _approved(running_jokes=[{"title": "t", "summary": SUMMARY, "evidence": [{"message_id": "m000001", "quote": "reminder: cheese protocol"}]}],
+                  awards=[{"award": "Best", "member": "Member 2", "summary": SUMMARY, "evidence": []}])
+    z = display.build_zone2(a, INDEX, NAMES)
+    assert z["joke"]["summary"] == "The group keeps invoking the cheese protocol in unrelated plans."  # sentence end, no ellipsis
+    assert z["awards"][0]["summary"].endswith("…") and len(z["awards"][0]["summary"]) <= 72  # awards: word boundary plus ellipsis

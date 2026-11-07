@@ -160,8 +160,8 @@ AI_CSS = """
 .zs{font-size:22px;line-height:27px;color:#4a4338;flex:none}
 .zq{border-left:4px solid #f3b58f;padding-left:10px;font-size:22px;line-height:27px;font-style:italic;color:#4a4338;flex:none}
 .zw{font-size:20px;line-height:24px;color:#6b6254;font-style:normal;white-space:nowrap}
-.za .zt{font-size:20px;line-height:24px}
-.zm{font-size:22px;line-height:26px;font-weight:700;color:#4a4338;flex:none}
+.za .zt{font-size:22px;line-height:26px}
+.zm{font-size:20px;line-height:24px;font-weight:700;color:#4a4338;flex:none}
 footer.ai{height:52px;margin:0 -40px;white-space:nowrap;font-size:20px;line-height:24px}
 """
 
