@@ -36,7 +36,7 @@ def test_config_a_and_the_tested_on_line_match_the_code_and_the_ci_matrix():
 
 
 def test_results_in_brief_sits_right_after_why_it_differs_with_at_most_six_plain_lines():
-    assert README.index("## Why it differs") < README.index("## Results in brief") < README.index("## Quickstart")
+    assert README.index("## Design choices") < README.index("## Results in brief") < README.index("## Quickstart")
     lines = [ln for ln in block("brief").splitlines() if ln.strip()]
     assert 1 <= len(lines) <= 6 and all(ln.startswith("- ") for ln in lines)
     text = block("brief").lower()
@@ -91,7 +91,7 @@ def make_index(dates):
 
 
 def test_the_item_rules_stated_in_the_readme_are_the_ones_in_the_code():
-    why = section("Why it differs")
+    why = section("Design choices")
     assert "Each kept quote is an exact substring of the cited message" in why and "each of its evidence quotes" not in README
     assert "a running joke needs at least 3 verified evidence messages on at least 2 dates, a moment at least 1, and an award at least 1 from the named member" in why
     assert verify.MIN_QUOTE_CHARS == 12
@@ -108,13 +108,13 @@ def test_the_item_rules_stated_in_the_readme_are_the_ones_in_the_code():
 
 
 def test_the_limits_additions_and_the_untouched_paragraphs():
-    # the History paragraph digest was updated deliberately in Phase 8a (the real history rewrite); the Licence digest is unchanged
+    # the History paragraph digest was updated deliberately in Phase 8a (the real history rewrite) and again in Phase 8d (prediction wording, Claude Code sentence); the Licence digest is unchanged
     lim = section("Limits")
     assert "No real chat has been analysed by the AI step" in lim and "analysed in this repository" not in README
     assert "the chat may be easier for the same model family (circularity)" in lim and "Haiku" in lim
     assert 'natural tics (for example "honestly I think")' in lim and "tic category" in lim
     assert "model id `claude-haiku-5-5` on 2026-11-06 and 2026-11-07 and may change if the model changes" in lim
-    for title, digest in (("History and publishing", "625cbfc30062c420276fb4bd325d2881199c6f7970be8860c3801d7653099d25"), ("Licence", "0f1549273e27ec667d4a38ee51e19d27fa84ecaf781231615314fad08fbb1c8f")):
+    for title, digest in (("History and publishing", "7bc5373fc2a7156a9a0761f2a6824258f565decead8898069e36bff1a926ce86"), ("Licence", "0f1549273e27ec667d4a38ee51e19d27fa84ecaf781231615314fad08fbb1c8f")):
         assert hashlib.sha256((f"## {title}" + section(title)).encode()).hexdigest() == digest, title
 
 

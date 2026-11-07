@@ -225,7 +225,7 @@ def table_rows(name: str) -> list[list[str]]:
 def test_the_readme_wording_fixes_are_in_place():
     hero = README.split("\n\n")[2]
     assert "auto-approved for this demo, with no human review" in hero
-    why = README.split("## Why it differs", 1)[1].split("## Quickstart", 1)[0]
+    why = README.split("## Design choices", 1)[1].split("## Quickstart", 1)[0]
     assert "does not check whether the quotes support the item's title and summary" in why and "what the hand rating measures (see Precision below)" in why
     assert "recall numbers, and precision once the hand ratings exist" in why and "precision-style" not in README
     lim = README.split("## Limits", 1)[1].split("\n## ", 1)[0]

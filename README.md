@@ -6,9 +6,9 @@
 
 Group Chat Wrapped turns a WhatsApp group export into a one-page card: counted statistics (top talkers, busiest day, longest silence, response times and so on) and, optionally, items found by a language model (running jokes, moments, awards). It is a Python package (pandas, Playwright for rendering, Claude Haiku for the AI step) with a command-line interface and a local Streamlit app.
 
-## Why it differs from common WhatsApp analysers
+## Design choices
 
-1. **Every AI claim is checked in code against the real message.** Each kept quote is an exact substring of the cited message (after normalisation, at least 12 characters), and an item is kept only if it meets the item rules: a running joke needs at least 3 verified evidence messages on at least 2 dates, a moment at least 1, and an award at least 1 from the named member. Items that fail are dropped, and the drop counts by reason are reported in the run output and in `docs/results/`. A claim the model cannot back with a real quote does not reach the card. What the code checks is that every kept quote exists in the cited message and meets the item rules; it does not check whether the quotes support the item's title and summary. That is what the hand rating measures (see Precision below).
+1. **Every quote behind an AI claim is checked in code against the real message.** Each kept quote is an exact substring of the cited message (after normalisation, at least 12 characters), and an item is kept only if it meets the item rules: a running joke needs at least 3 verified evidence messages on at least 2 dates, a moment at least 1, and an award at least 1 from the named member. Items that fail are dropped, and the drop counts by reason are reported in the run output and in `docs/results/`. A claim the model cannot back with a real quote does not reach the card. What the code checks is that every kept quote exists in the cited message and meets the item rules; it does not check whether the quotes support the item's title and summary. That is what the hand rating measures (see Precision below).
 2. **Privacy by design, with the limits stated.** Names are replaced before anything is sent, a keyword screen withholds sensitive messages, and `preview` shows the exact text that would be sent. Stats-only mode (the default) makes no network call. AI mode needs an explicit consent step and runs under a cost cap. Pseudonymised text is still sent to Anthropic in AI mode; see the privacy section.
 3. **A measured evaluation on a synthetic chat with planted ground truth.** The test chats contain jokes, moments and other items planted at known positions, so recall numbers, and precision once the hand ratings exist, are computed rather than asserted. The numbers, their sample sizes and their limits are below; they are not claims about real chats.
 
@@ -24,6 +24,8 @@ Group Chat Wrapped turns a WhatsApp group export into a one-page card: counted s
 Details, definitions and limits are in the Evaluation and Limits sections below.
 
 ## Quickstart
+
+Requires Python 3.11 or newer (`requires-python` in `pyproject.toml`). CI covers Python 3.11 and 3.13; local runs used Python 3.15.0.
 
 ```sh
 python3 -m venv .venv
@@ -228,7 +230,7 @@ The review source is a saved config A run on the synthetic chat that I judged to
 
 ## History and publishing
 
-The history of this repository was rewritten once before publishing, to remove build artefacts, local paths and personal email addresses: the author and committer of every commit were replaced by GitHub's no-reply address. The old-to-new commit hashes are in `docs/results/commit_map.md`. The rewrite kept every commit and their order (one to one), so the predictions for the chunked experiment (commit `cd8e87f`) and for the large-dataset experiments (commit `429cb2d`) were still committed before the live runs they predict. Commit messages, including Co-Authored-By trailers, were not changed. `scripts/prepublish_check.py` checks the rewritten history (no home-directory paths, no build artefacts, no large blobs).
+The history of this repository was rewritten once before publishing, to remove build artefacts, local paths and personal email addresses: the author and committer of every commit were replaced by GitHub's no-reply address. The old-to-new commit hashes are in `docs/results/commit_map.md`. The rewrite kept every commit and their order (one to one). The predictions for the chunked experiment on the dense chat (commit `cd8e87f`) and for the sparse control and the chunked run on the large chat (commit `429cb2d`) were committed before those live runs; the first large-chat single-pass run (889,497 tokens, n = 1) had no pre-registered prediction. The project was developed with Claude Code, and the commits carry Co-Authored-By trailers, which the rewrite did not change. `scripts/prepublish_check.py` checks the rewritten history (no home-directory paths, no build artefacts, no large blobs).
 
 ## Licence
 
