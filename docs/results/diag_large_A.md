@@ -68,3 +68,8 @@ Hypothetical re-pointing (measure only; the pipeline is unchanged):
 | large chat | 67 | 17097 | 0.39% |
 
 Large chat, planted lines excluded: 19 distinct messages of 4+ words appear more than 3 times. Top 10 word 3-grams with counts: so we can 229; i think the 198; and we can 193; i keep thinking 174; honestly i think 170; on the way 167; let's do it 166; sounds like a 165; honestly though i 163; i'll sort the 160.
+
+
+## Reconciling 10 of 12 (Phase 5a report) with 9 of 12 (this file)
+
+Both count the same 12 dropped evidence items. Phase 5a counted the 10 items with status other_message (the quote is not in the cited message but is found in another message). That classifier first looks for the normalised quote inside other messages and, when none contains it, retries with a stronger fold of case, punctuation and spacing. This file lists nearest matches by the normalised-contains test only, with no second pass. Nine of the ten other_message quotes match that way; the tenth (moments[1], evidence 1) matches only after the stronger fold, so it has no nearest match here (n_matches 0). The remaining two drops are not_found (no match under either test) and too_short (grounded but under 12 characters). 9 of 12 is the count under the stricter test and 10 of 12 under the looser one; neither changes any conclusion, and the re-pointing numbers above use the stricter test.

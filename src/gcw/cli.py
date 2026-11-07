@@ -41,7 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
     an.add_argument("--save-response", action="store_true", help="also save the raw model response and the verified report under out/runs/ (OFF by default; they hold pseudonymised quotes, delete them afterwards)")
     an.add_argument("--phase", default="3b", help="ledger label prefix for the phase budget (default 3b)")
     an.add_argument("--mode", choices=["single", "chunked", "auto"], default="single",
-                    help="single (default): one request; chunked: day-aligned chunks, map-reduce; auto: exact count, single-pass up to 950000 tokens else chunked (needs --count or --confirm)")
+                    help="single (default): one request; chunked: day-aligned chunks, map-reduce; auto: exact count, single-pass up to 300000 tokens else chunked; --mode single stays available up to the model limit (needs --count or --confirm)")
     an.add_argument("--workers", type=int, default=4, help="parallel map calls in chunked mode (at most 4)")
     an.add_argument("--max-input-tokens", type=int, default=95_000, help="refuse a request with more input tokens than this (default 95000)")
     an.add_argument("--max-run-cost", type=float, help="refuse if the worst-case cost estimate of one run is above this many USD")

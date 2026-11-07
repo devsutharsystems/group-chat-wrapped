@@ -911,6 +911,12 @@ def render_dropped_markdown(d: dict, dens: dict | None = None, rep: dict | None 
         L.append("")
     if rep:
         L += ["Large chat, planted lines excluded: " + f"{rep['repeated_over_3']} distinct messages of 4+ words appear more than 3 times. Top 10 word 3-grams with counts: " + "; ".join(f"{g} {c}" for g, c in rep["top_3grams"][:10]) + ".", ""]
+    L += ["", "## Reconciling 10 of 12 (Phase 5a report) with 9 of 12 (this file)", "",
+          "Both count the same 12 dropped evidence items. Phase 5a counted the 10 items with status other_message (the quote is not in the cited message but is found in another message). "
+          "That classifier first looks for the normalised quote inside other messages and, when none contains it, retries with a stronger fold of case, punctuation and spacing. "
+          "This file lists nearest matches by the normalised-contains test only, with no second pass. Nine of the ten other_message quotes match that way; the tenth (moments[1], evidence 1) matches only after the stronger fold, "
+          "so it has no nearest match here (n_matches 0). The remaining two drops are not_found (no match under either test) and too_short (grounded but under 12 characters). "
+          "9 of 12 is the count under the stricter test and 10 of 12 under the looser one; neither changes any conclusion, and the re-pointing numbers above use the stricter test."]
     return "\n".join(L)
 
 

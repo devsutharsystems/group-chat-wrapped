@@ -475,9 +475,9 @@ def run_cli(monkeypatch, capsys, fake, *args):
     return rc, capsys.readouterr()
 
 
-@pytest.mark.parametrize("tokens, mode", [(950_000, "single"), (950_001, "chunked"), (269_809, "single")])
+@pytest.mark.parametrize("tokens, mode", [(300_000, "single"), (300_001, "chunked"), (269_809, "single")])
 def test_choose_mode_threshold(tokens, mode):
-    assert chunked.choose_mode(tokens) == mode and chunked.SINGLE_PASS_LIMIT == 950_000
+    assert chunked.choose_mode(tokens) == mode and chunked.SINGLE_PASS_LIMIT == 300_000
 
 
 def big_count_fake(full_tokens):
@@ -493,12 +493,12 @@ def big_count_fake(full_tokens):
     return F(per_line=52)
 
 
-def test_auto_mode_picks_single_up_to_950000_and_chunked_above_with_the_exact_warning(monkeypatch, capsys):
-    rc, out = run_cli(monkeypatch, capsys, big_count_fake(950_000), "--mode", "auto", "--count")
-    assert rc == 0 and "using single" in out.out and chunked.AUTO_WARNING not in out.out and "exact request tokens" in out.out and "950000" in out.out
-    rc, out = run_cli(monkeypatch, capsys, big_count_fake(950_001), "--mode", "auto", "--count")
+def test_auto_mode_picks_single_up_to_300000_and_chunked_above_with_the_exact_warning(monkeypatch, capsys):
+    rc, out = run_cli(monkeypatch, capsys, big_count_fake(300_000), "--mode", "auto", "--count")
+    assert rc == 0 and "using single" in out.out and chunked.AUTO_WARNING not in out.out and "exact request tokens" in out.out and "300000" in out.out
+    rc, out = run_cli(monkeypatch, capsys, big_count_fake(300_001), "--mode", "auto", "--count")
     assert "using chunked" in out.out and out.out.count(chunked.AUTO_WARNING) == 1 and "chunked plan: " in out.out
-    assert chunked.AUTO_WARNING == "chat exceeds the single-pass limit; using chunked map-reduce, long-range recall may drop"
+    assert chunked.AUTO_WARNING == "chat above 300,000 tokens; using chunked map-reduce (single-pass quality at this size was not demonstrated)"
 
 
 def test_cli_modes_without_flags_send_nothing_and_auto_needs_a_count(monkeypatch, capsys):

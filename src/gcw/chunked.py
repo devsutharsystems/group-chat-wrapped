@@ -26,8 +26,8 @@ from gcw import analyze, cost, llm, privacy, verify
 CHUNK_LIMIT = 85_000  # exact tokens per map request
 MAP_CALL_STOP = 95_000  # a map or reduce request above this is never sent
 PHASE_BUDGET_USD = 0.30
-SINGLE_PASS_LIMIT = 950_000
-AUTO_WARNING = "chat exceeds the single-pass limit; using chunked map-reduce, long-range recall may drop"
+SINGLE_PASS_LIMIT = 300_000  # provisional: single-pass worked at 270K (n=3) and 297K (n=1) on dev items only and failed at 889K (n=1); see docs/PRD.md R5
+AUTO_WARNING = "chat above 300,000 tokens; using chunked map-reduce (single-pass quality at this size was not demonstrated)"
 WORKERS = 4
 
 REDUCE_SYSTEM = """You are merging duplicate findings about a friends' group chat. An earlier step proposed candidate running jokes, moments and awards, each from a different part of the chat.
