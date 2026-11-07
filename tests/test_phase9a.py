@@ -36,6 +36,7 @@ def test_the_hypothesis_note_takes_its_numbers_from_the_results_files_and_adds_n
     assert f"chunked found {f(chunked)} of {p(chunked)} (`docs/results/eval_large_chunked.json`), one run each (n = {single['n_runs']})" in n
     assert single["n_runs"] == chunked["n_runs"] == 1
     assert "written in `docs/PRD.md` before any run (single-pass wins recall on long-range jokes)" in n and "was not supported in the near-1M-token setup" in n
+    assert "This shows only that the hypothesis was not supported in this single run; it is not a general claim about single-pass against chunked." in n and "failed in this setup" not in n
     assert "Both runs read the same chat" in n and "density is a confound" in n and "not a general claim about single-pass against chunked" in n
     prd = (ROOT / "docs/PRD.md").read_text()
     assert "**Hypothesis (written before any run):** single-pass wins recall on long-range jokes" in prd  # the quoted hypothesis exists in the PRD
@@ -54,3 +55,13 @@ def test_why_the_precision_sample_is_40_of_41_comes_from_the_code_and_the_counts
     prec = json.loads((ROOT / "docs/results/precision_A.json").read_text())
     assert {t: prec["by_type"][t]["n"] for t in take} == take  # the rated sample is exactly what the code's allocation gives
     assert "after the cap it left out 1 running joke" in block("precision_block")
+
+
+def test_the_tested_on_paragraph_names_the_second_ci_failure_and_its_fix():
+    import subprocess
+
+    tested = next(ln for ln in README.split("## Evaluation", 1)[1].splitlines() if ln.startswith("**Tested on:**"))
+    assert ("A second CI run failed on a commit-count assertion in `tests/test_phase7e.py` (the test counted commits since the history rewrite; the failing push was `458fcda`), "
+            "and `32bc10f` rewrote that test so it no longer depends on the commit count.") in tested
+    for h, start in (("458fcda", "Phase 8d"), ("32bc10f", "Phase 8e")):  # the hashes are the commits of those phases in this repository's log
+        assert subprocess.run(["git", "-C", str(ROOT), "log", "-1", "--format=%s", h], capture_output=True, text=True).stdout.startswith(start)

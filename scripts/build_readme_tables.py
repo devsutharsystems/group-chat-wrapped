@@ -191,7 +191,7 @@ def hypothesis_note(root: Path) -> str:
     return (f"The hypothesis written in `docs/PRD.md` before any run (single-pass wins recall on long-range jokes) was not supported in the near-1M-token setup: single-pass found {found(big_s)} planted items "
             f"(`docs/results/eval_large_A.json`) and chunked found {found(big_c)} (`docs/results/eval_large_chunked.json`), one run each (n = {big_s['n_runs']}). Both runs read the same chat, whose planted density "
             f"({100 * dens['large']:.2f}%) is lower than the dense chat's ({100 * dens['dense']:.2f}%), and the density is a confound for any comparison with the dense-chat results "
-            "(`docs/results/compare_large.md`). This shows that the hypothesis failed in this setup; it is not a general claim about single-pass against chunked.")
+            "(`docs/results/compare_large.md`). This shows only that the hypothesis was not supported in this single run; it is not a general claim about single-pass against chunked.")
 
 
 def dropped_note(root: Path) -> str:
