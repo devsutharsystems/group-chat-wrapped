@@ -16,7 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 PRECISION_LITERAL = "Precision: not yet measured (hand-rating pending)"
-BLOCKS = ("eval_table", "cost_block", "precision_block", "scale_limits", "versions")
+BLOCKS = ("brief", "eval_table", "dropped_note", "cost_block", "precision_block", "scale_limits", "versions")
+RATING_SEED = 4242  # the default of `gcw rating-pack --seed` (a test checks it)
 ROWS = [  # (label, results file, chat key, chunked)
     ("dense 270K tokens, single-pass", "eval_full_A", "dense", False),
     ("dense 270K tokens, chunked", "eval_full_chunked", "dense", True),
@@ -93,21 +94,90 @@ def cost_block(root: Path) -> str:
     return "\n".join(L)
 
 
+def fmt_ci(d: dict) -> str:
+    """'21 of 40, 52.5%, interval 37.5% to 67.1%' from a Wilson proportion dict."""
+    if d["n"] == 0:
+        return "n/a"
+    return f"{d['k']} of {d['n']}, {100 * d['p']:.1f}%, interval {100 * d['lo']:.1f}% to {100 * d['hi']:.1f}%"
+
+
+def rubric_lines(root: Path) -> list[str]:
+    """The rating rubric, copied from docs/PRD.md (the bullets under 'Rating rubric', without the reporting line)."""
+    text = (root / "docs" / "PRD.md").read_text(encoding="utf-8")
+    tail = text.split("**Rating rubric", 1)[1].splitlines()[1:]
+    out = []
+    for ln in tail:
+        if not ln.startswith("  - "):
+            break
+        if ln.strip().startswith("- Precision is reported"):
+            continue
+        out.append(ln.strip())
+    return out
+
+
 def precision_block(root: Path) -> str:
     p = root / "docs" / "results" / "precision_A.json"
     if not p.is_file():
         return PRECISION_LITERAL
-    from gcw import evaluate
-
     r = json.loads(p.read_text(encoding="utf-8"))
     o = r["overall"]
-    L = [f"Precision of the verified items from hand ratings ({o['n']} items; strict = rated true, lenient = true plus partly; Wilson 95% interval). {r['note']}", "",
-         "| group | n | strict | lenient |", "|---|---|---|---|",
-         f"| overall | {o['n']} | {evaluate._ci(o['strict'])} | {evaluate._ci(o['lenient'])} |"]
-    L += [f"| {t} | {v['n']} | {evaluate._ci(v['strict'])} | {evaluate._ci(v['lenient'])} |" for t, v in r["by_type"].items()]
-    L += [f"| run {k} | {v['n']} | {evaluate._ci(v['strict'])} | {evaluate._ci(v['lenient'])} |" for k, v in r["by_run"].items()]
-    L += [f"| {label} | {r[key]['n']} | {evaluate._ci(r[key]['strict'])} | {evaluate._ci(r[key]['lenient'])} |" for label, key in (("matching a planted item", "planted_matching"), ("unplanted", "unplanted"))]
+    verified = sum(sum(x["items_kept"].values()) for x in _load(root, "eval_full_A")["runs"])
+    moments_partly = r["by_type"]["moments"]["partly"]
+    L = ["Rubric (copied from `docs/PRD.md`; fixed before any rating):", "", *rubric_lines(root), "",
+         "Standard applied: \"true\" when the shown quotes support the title and summary; \"partly\" when part of the claim or its detail is not shown.", "",
+         f"Sample: {r['n_items']} of the {verified} verified items from the three runs, drawn with seed {RATING_SEED}, rated by the author in a single pass. The author designed the dataset, so the ratings are not blind. "
+         f"Strict = rated true; lenient = true plus partly; Wilson 95% interval. {r['note']}", "",
+         "| group | n | strict | lenient |", "|---|---|---|---|", f"| overall | {o['n']} | {fmt_ci(o['strict'])} | {fmt_ci(o['lenient'])} |"]
+    L += [f"| {t} | {v['n']} | {fmt_ci(v['strict'])} | {fmt_ci(v['lenient'])} |" for t, v in sorted(r["by_type"].items())]
+    L += [f"| run {i} | {v['n']} | {fmt_ci(v['strict'])} | {fmt_ci(v['lenient'])} |" for i, (_, v) in enumerate(sorted(r["by_run"].items()), 1)]
+    L += [f"| {label} | {r[key]['n']} | {fmt_ci(r[key]['strict'])} | {fmt_ci(r[key]['lenient'])} |" for label, key in (("matching a planted item", "planted_matching"), ("unplanted", "unplanted"))]
+    L += ["", "The unplanted rows mix item types because awards have no planted truth, so planted against unplanted is not a like-for-like comparison.", "",
+          f"For the {moments_partly} moments rated partly, the author's reason was mostly that the summary added concrete details not present in the displayed messages; incomplete quotes were a secondary reason. "
+          "No per-item notes were recorded, so this is the author's recollection, not a coded result."]
     return "\n".join(L)
+
+
+def results_brief(root: Path) -> str:
+    """At most six plain lines from the results files; no adjectives, no ranking."""
+    dens = _densities(root)
+    pr = json.loads((root / "docs" / "results" / "precision_A.json").read_text(encoding="utf-8")) if (root / "docs" / "results" / "precision_A.json").is_file() else None
+    a, c = _load(root, "eval_full_A"), _load(root, "eval_full_chunked")
+    big_s, big_c = _load(root, "eval_large_A"), _load(root, "eval_large_chunked")
+
+    def recall(r: dict) -> str:
+        return f"{sum(v['strict_found_item_runs'] for v in r['recall_by_type'].values())} of {sum(v['possible_item_runs'] for v in r['recall_by_type'].values())}"
+
+    def short(d: dict) -> str:
+        return f"{d['k']} of {d['n']} ({100 * d['p']:.1f}%)"
+
+    lines = []
+    if pr:
+        bt = pr["by_type"]
+        lines.append(f"- Hand-rated precision (n = {pr['overall']['n']}, rated by the author, not blind), strict / lenient: overall {short(pr['overall']['strict'])} / {short(pr['overall']['lenient'])}; "
+                     + "; ".join(f"{t.replace('_', ' ')} {short(bt[t]['strict'])} / {short(bt[t]['lenient'])}" for t in ("running_jokes", "moments", "awards")) + ".")
+    else:
+        lines.append("- " + PRECISION_LITERAL)
+    lines.append(f"- Strict recall of planted items on the dense chat (item-runs found, n = {a['n_runs']} runs each): single-pass {recall(a)}, chunked {recall(c)}.")
+    lines.append(f"- Cost per run on the dense chat, computed from usage fields and not reconciled with the Console: single-pass ${a['summary']['cost_usd']['mean']:.4f}, chunked ${c['summary']['cost_usd']['mean']:.4f}.")
+    lines.append(f"- Large chat at {int(sum(x['input_tokens'] for x in big_s['runs']) / big_s['n_runs']):,} tokens (n = {big_s['n_runs']} run each; planted density {100 * dens['large']:.2f}% against {100 * dens['dense']:.2f}% on the dense chat, so the comparison is confounded): "
+                 f"single-pass found {recall(big_s)} planted items, chunked {recall(big_c)}.")
+    return "\n".join(lines)
+
+
+def dropped_note(root: Path) -> str:
+    a = _load(root, "eval_full_A")
+    counts: dict[str, int] = {}
+    for run in a["runs"]:
+        for k, v in run["status_counts"].items():
+            counts[k] = counts.get(k, 0) + v
+    dropped = {k: v for k, v in counts.items() if k != "verified"}
+    base = ("Rule-compliant rate: the share of evidence items that pass verification (the message id exists, the quote has at least 12 characters, and it is an exact substring of the cited message). "
+            f"In the {a['n_runs']} dense single-pass runs (`docs/results/eval_full_A.json`) {sum(dropped.values())} evidence items were dropped. ")
+    if set(dropped) == {"other_message"}:
+        return (base + "All of them have the status other_message, none is not_found or any other status: the quote was not in the cited message but was found in another message (defined in `src/gcw/evaluate.py`), "
+                "so none was invented. The results file records the status counts only; it does not record whether each match was exact after normalisation or needed the classifier's second pass "
+                "(a stronger fold of case and punctuation), so these quotes are not claimed to be verbatim.")
+    return base + "Their statuses are: " + ", ".join(f"{k} {v}" for k, v in sorted(dropped.items())) + " (`docs/results/eval_full_A.json`)."
 
 
 def scale_limits(root: Path) -> str:
@@ -137,7 +207,8 @@ def versions(root: Path) -> str:
 
 
 def render_blocks(root: Path = ROOT) -> dict[str, str]:
-    return {"eval_table": eval_table(root), "cost_block": cost_block(root), "precision_block": precision_block(root), "scale_limits": scale_limits(root), "versions": versions(root)}
+    return {"brief": results_brief(root), "eval_table": eval_table(root), "dropped_note": dropped_note(root), "cost_block": cost_block(root), "precision_block": precision_block(root),
+            "scale_limits": scale_limits(root), "versions": versions(root)}
 
 
 def fill(text: str, blocks: dict[str, str]) -> str:

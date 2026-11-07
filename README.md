@@ -8,9 +8,20 @@ Group Chat Wrapped turns a WhatsApp group export into a one-page card: counted s
 
 ## Why it differs from common WhatsApp analysers
 
-1. **Every AI claim is checked in code against the real message.** A running joke, moment or award is kept only if each of its evidence quotes is an exact substring of the cited message, and if it meets the item rules (a joke needs several quotes on more than one date). Items that fail are dropped, and the drop counts by reason are reported in the run output and in `docs/results/`. A claim the model cannot back with a real quote does not reach the card. What the code checks is that every kept quote exists in the cited message and meets the item rules; it does not check whether the quotes support the item's title and summary. That is what the hand rating measures (see Precision below).
+1. **Every AI claim is checked in code against the real message.** Each kept quote is an exact substring of the cited message (after normalisation, at least 12 characters), and an item is kept only if it meets the item rules: a running joke needs at least 3 verified evidence messages on at least 2 dates, a moment at least 1, and an award at least 1 from the named member. Items that fail are dropped, and the drop counts by reason are reported in the run output and in `docs/results/`. A claim the model cannot back with a real quote does not reach the card. What the code checks is that every kept quote exists in the cited message and meets the item rules; it does not check whether the quotes support the item's title and summary. That is what the hand rating measures (see Precision below).
 2. **Privacy by design, with the limits stated.** Names are replaced before anything is sent, a keyword screen withholds sensitive messages, and `preview` shows the exact text that would be sent. Stats-only mode (the default) makes no network call. AI mode needs an explicit consent step and runs under a cost cap. Pseudonymised text is still sent to Anthropic in AI mode; see the privacy section.
 3. **A measured evaluation on a synthetic chat with planted ground truth.** The test chats contain jokes, moments and other items planted at known positions, so recall numbers, and precision once the hand ratings exist, are computed rather than asserted. The numbers, their sample sizes and their limits are below; they are not claims about real chats.
+
+## Results in brief
+
+<!-- BEGIN:brief -->
+- Hand-rated precision (n = 40, rated by the author, not blind), strict / lenient: overall 21 of 40 (52.5%) / 39 of 40 (97.5%); running jokes 18 of 21 (85.7%) / 21 of 21 (100.0%); moments 1 of 12 (8.3%) / 12 of 12 (100.0%); awards 2 of 7 (28.6%) / 6 of 7 (85.7%).
+- Strict recall of planted items on the dense chat (item-runs found, n = 3 runs each): single-pass 25 of 30, chunked 27 of 30.
+- Cost per run on the dense chat, computed from usage fields and not reconciled with the Console: single-pass $0.1402, chunked $0.0329.
+- Large chat at 889,497 tokens (n = 1 run each; planted density 0.39% against 1.30% on the dense chat, so the comparison is confounded): single-pass found 0 of 10 planted items, chunked 5 of 10.
+<!-- END:brief -->
+
+Details, definitions and limits are in the Evaluation and Limits sections below.
 
 ## Quickstart
 
@@ -69,7 +80,11 @@ PLAYWRIGHT_BROWSERS_PATH=.cache/ms-playwright PYTHONPATH=src .venv/bin/streamlit
 
 ## Evaluation
 
-All numbers below are generated from `docs/results/*.json` and memory logs by `scripts/build_readme_tables.py`; a test fails if they are stale. Strict recall counts a planted item as found only when the verified evidence of one AI item sits mostly on that item's planted messages. Planted density is the share of payload messages that are planted lines.
+All numbers below are generated from `docs/results/*.json` and memory logs by `scripts/build_readme_tables.py`; a test fails if they are stale. **Config A** is the only configuration evaluated: model `claude-haiku-5-5`, thinking disabled, effort low, prompt v1 frozen (identifiers below), evaluated on 2026-11-06 and 2026-11-07.
+
+**Tested on:** Python 3.15.0 and macOS 27.2 (M2, 8 GB) locally. CI is configured for Python 3.11 and 3.13 and has not run yet, so there is no badge.
+
+Strict recall counts a planted item as found only when the verified evidence of one AI item sits mostly on that item's planted messages. Planted density is the share of payload messages that are planted lines.
 
 <!-- BEGIN:eval_table -->
 | row | n | input tokens per run | planted density | strict recall (found of in-scope item-runs) | rule-compliant rate | unplanted items per run (awards / moments / jokes) | cost per run (USD) | wall-clock per run (s) | sum of call latencies per run (s, chunked rows only) |
@@ -82,6 +97,10 @@ All numbers below are generated from `docs/results/*.json` and memory logs by `s
 <!-- END:eval_table -->
 
 Rows with n = 1 are single observations. The large-chat rows hold the same planted lines as the dense chat in a longer chat, so planted density differs between rows (see the density column) and the rows are not a controlled comparison (`docs/results/compare_large.md`, `docs/results/diag_large_A.md`).
+
+<!-- BEGIN:dropped_note -->
+Rule-compliant rate: the share of evidence items that pass verification (the message id exists, the quote has at least 12 characters, and it is an exact substring of the cited message). In the 3 dense single-pass runs (`docs/results/eval_full_A.json`) 8 evidence items were dropped. All of them have the status other_message, none is not_found or any other status: the quote was not in the cited message but was found in another message (defined in `src/gcw/evaluate.py`), so none was invented. The results file records the status counts only; it does not record whether each match was exact after normalisation or needed the classifier's second pass (a stronger fold of case and punctuation), so these quotes are not claimed to be verbatim.
+<!-- END:dropped_note -->
 
 **Cost, latency and memory.**
 
@@ -118,19 +137,35 @@ Screenshot harness (a development tool, not part of the app's footprint; ceiling
 **Precision.**
 
 <!-- BEGIN:precision_block -->
-Precision of the verified items from hand ratings (40 items; strict = rated true, lenient = true plus partly; Wilson 95% interval). The three runs are not independent samples: they read the same chat with the same prompt, so the same items and the same mistakes recur across runs and the intervals below understate the real uncertainty.
+Rubric (copied from `docs/PRD.md`; fixed before any rating):
+
+- JOKE true = the evidence shows a recurring bit or phrase said with joking intent on at least 2 dates.
+- MOMENT true = the cited messages show one notable event that the title describes.
+- AWARD true = the evidence supports the award for that member.
+- PARTLY = the evidence supports only part of the title or summary, or the joking intent is weak.
+- FALSE = the evidence does not support the claim.
+- TIC = a verbal tic or stock phrase, not a joke (jokes only).
+- Rate from the evidence shown, not from guesses about the chat.
+
+Standard applied: "true" when the shown quotes support the title and summary; "partly" when part of the claim or its detail is not shown.
+
+Sample: 40 of the 41 verified items from the three runs, drawn with seed 4242, rated by the author in a single pass. The author designed the dataset, so the ratings are not blind. Strict = rated true; lenient = true plus partly; Wilson 95% interval. The three runs are not independent samples: they read the same chat with the same prompt, so the same items and the same mistakes recur across runs and the intervals below understate the real uncertainty.
 
 | group | n | strict | lenient |
 |---|---|---|---|
-| overall | 40 | 21 of 40; p 0.525; interval lo 0.375; hi 0.671 | 39 of 40; p 0.975; interval lo 0.871; hi 0.996 |
-| awards | 7 | 2 of 7; p 0.286; interval lo 0.082; hi 0.641 | 6 of 7; p 0.857; interval lo 0.487; hi 0.974 |
-| moments | 12 | 1 of 12; p 0.083; interval lo 0.015; hi 0.354 | 12 of 12; p 1.000; interval lo 0.757; hi 1.000 |
-| running_jokes | 21 | 18 of 21; p 0.857; interval lo 0.654; hi 0.950 | 21 of 21; p 1.000; interval lo 0.845; hi 1.000 |
-| run 20261107T110344-A | 15 | 6 of 15; p 0.400; interval lo 0.198; hi 0.642 | 14 of 15; p 0.933; interval lo 0.702; hi 0.988 |
-| run 20261107T110407-A | 12 | 8 of 12; p 0.667; interval lo 0.391; hi 0.862 | 12 of 12; p 1.000; interval lo 0.757; hi 1.000 |
-| run 20261107T110421-A | 13 | 7 of 13; p 0.538; interval lo 0.291; hi 0.768 | 13 of 13; p 1.000; interval lo 0.772; hi 1.000 |
-| matching a planted item | 25 | 18 of 25; p 0.720; interval lo 0.524; hi 0.857 | 25 of 25; p 1.000; interval lo 0.867; hi 1.000 |
-| unplanted | 15 | 3 of 15; p 0.200; interval lo 0.070; hi 0.452 | 14 of 15; p 0.933; interval lo 0.702; hi 0.988 |
+| overall | 40 | 21 of 40, 52.5%, interval 37.5% to 67.1% | 39 of 40, 97.5%, interval 87.1% to 99.6% |
+| awards | 7 | 2 of 7, 28.6%, interval 8.2% to 64.1% | 6 of 7, 85.7%, interval 48.7% to 97.4% |
+| moments | 12 | 1 of 12, 8.3%, interval 1.5% to 35.4% | 12 of 12, 100.0%, interval 75.8% to 100.0% |
+| running_jokes | 21 | 18 of 21, 85.7%, interval 65.4% to 95.0% | 21 of 21, 100.0%, interval 84.5% to 100.0% |
+| run 1 | 15 | 6 of 15, 40.0%, interval 19.8% to 64.2% | 14 of 15, 93.3%, interval 70.2% to 98.8% |
+| run 2 | 12 | 8 of 12, 66.7%, interval 39.1% to 86.2% | 12 of 12, 100.0%, interval 75.8% to 100.0% |
+| run 3 | 13 | 7 of 13, 53.8%, interval 29.1% to 76.8% | 13 of 13, 100.0%, interval 77.2% to 100.0% |
+| matching a planted item | 25 | 18 of 25, 72.0%, interval 52.4% to 85.7% | 25 of 25, 100.0%, interval 86.7% to 100.0% |
+| unplanted | 15 | 3 of 15, 20.0%, interval 7.0% to 45.2% | 14 of 15, 93.3%, interval 70.2% to 98.8% |
+
+The unplanted rows mix item types because awards have no planted truth, so planted against unplanted is not a like-for-like comparison.
+
+For the 11 moments rated partly, the author's reason was mostly that the summary added concrete details not present in the displayed messages; incomplete quotes were a secondary reason. No per-item notes were recorded, so this is the author's recollection, not a coded result.
 <!-- END:precision_block -->
 
 **Frozen identifiers** (prompts, schema and verification rules are frozen; the datasets are checked by hash before any evaluation):
@@ -166,7 +201,10 @@ The review source is a saved config A run on the synthetic chat that I judged to
 
 ## Limits
 
-- The test chats are synthetic and their planted items are easier than real jokes; results say nothing certain about real chats. No real chat has been analysed in this repository, and dev items were seen during development, so the numbers are not blind.
+- The test chats are synthetic and their planted items are easier than real jokes; results say nothing certain about real chats. No real chat has been analysed by the AI step, and dev items were seen during development, so the numbers are not blind.
+- The synthetic chat's filler was written by Haiku and the analysis uses Haiku, so the chat may be easier for the same model family (circularity).
+- The filler has natural tics (for example "honestly I think") that can look like running jokes, which is why the rating scheme has a tic category.
+- The results are for model id `claude-haiku-5-5` on 2026-11-06 and 2026-11-07 and may change if the model changes.
 - Sample sizes are small: n is shown in every table row, and rows with n = 1 are single observations on one configuration.
 <!-- BEGIN:scale_limits -->
 - Single-pass on the sparse chat at 889,497 tokens found 0 of 10 planted items (n = 1); chunked on the same chat found 5 of 10 (n = 1). The context window accepts the request; quality at that size was not demonstrated.

@@ -37,10 +37,14 @@ def test_a_changed_block_is_reported_stale_and_fill_replaces_only_the_blocks(tmp
 def test_the_precision_block_is_the_literal_line_until_the_ratings_exist(tmp_path):
     (tmp_path / "docs" / "results").mkdir(parents=True)
     assert btab.precision_block(tmp_path) == "Precision: not yet measured (hand-rating pending)"
+    import shutil
+
+    shutil.copy(ROOT / "docs" / "PRD.md", tmp_path / "docs" / "PRD.md")  # the block copies the rubric from the PRD and counts verified items from the dense results
+    shutil.copy(ROOT / "docs" / "results" / "eval_full_A.json", tmp_path / "docs" / "results" / "eval_full_A.json")
     t = evaluate._tally(["true", "true", "false", "partly"])
-    (tmp_path / "docs" / "results" / "precision_A.json").write_text(json.dumps({"note": "n-note", "overall": t, "by_type": {"running_jokes": t}, "by_run": {"r1": t}, "planted_matching": t, "unplanted": t}))
+    (tmp_path / "docs" / "results" / "precision_A.json").write_text(json.dumps({"note": "n-note", "n_items": 4, "overall": t, "by_type": {"running_jokes": t, "moments": t}, "by_run": {"r1": t}, "planted_matching": t, "unplanted": t}))
     out = btab.precision_block(tmp_path)
-    assert "2 of 4" in out and "running_jokes" in out and "| run r1 |" in out and "matching a planted item" in out and "| unplanted |" in out and "hand-rating pending" not in out
+    assert "2 of 4, 50.0%, interval" in out and "running_jokes" in out and "| run 1 |" in out and "matching a planted item" in out and "| unplanted |" in out and "hand-rating pending" not in out
 
 
 def test_the_table_rows_and_columns_come_from_the_results_files():
