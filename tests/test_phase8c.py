@@ -15,13 +15,13 @@ def test_readme_says_what_ci_did_and_what_it_did_not_check():
     ev = README.split("## Evaluation", 1)[1].split("\n## ", 1)[0]
     tested = next(ln for ln in ev.splitlines() if ln.startswith("**Tested on:**"))
     for k in ("CI passed on Python 3.11 and 3.13 on `ubuntu-latest`", "the render tests ran with the runner's fonts", "the slow render tests are deselected in CI",
-              "first CI run failed for a browser-path reason", "which the next commit fixed", "migrating to Ubuntu 26", "no CI badge yet"):
+              "first CI run failed for a browser-path reason", "which the next commit fixed", "migrating to Ubuntu 26"):
         assert k in tested, k
     lim = README.split("## Limits", 1)[1].split("\n## ", 1)[0]
     assert "emoji appearance on Linux was not inspected" in lim and "layout tests of the card passed on the CI runner" in lim
     assert "Cards need a colour emoji font on Linux; this is unverified" not in README and "has not run yet" not in README
     assert "slow render tests are deselected there" in lim and "migrating to Ubuntu 26" in lim
-    assert "![ci" not in README.lower() and "badge.svg" not in README.lower() and "actions/workflows" not in README
+    assert "no CI badge" not in README and README.count("actions/workflows/ci.yml/badge.svg") == 1  # the badge exists since Phase 9a (tests/test_phase9a.py)
 
 
 def test_publish_status_lines():

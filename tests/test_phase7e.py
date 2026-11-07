@@ -32,7 +32,7 @@ def test_config_a_and_the_tested_on_line_match_the_code_and_the_ci_matrix():
     versions = re.search(r"python-version: \[(.*?)\]", ci).group(1)
     assert "'3.11'" in versions and "'3.13'" in versions
     assert "**Tested on:** Python 3.15.0 and macOS" in ev and "has not run yet" not in README  # CI has run since Phase 8b; the wording is checked in tests/test_phase8c.py
-    assert "![ci" not in README.lower() and "badge.svg" not in README.lower()
+    assert README.count("actions/workflows/ci.yml/badge.svg") == 1  # the badge was added in Phase 9a, after the first green CI run
 
 
 def test_results_in_brief_sits_right_after_why_it_differs_with_at_most_six_plain_lines():
@@ -56,7 +56,8 @@ def test_the_precision_block_has_the_rubric_the_standard_the_sample_and_the_form
     assert 'Standard applied: "true" when the shown quotes support the title and summary; "partly" when part of the claim or its detail is not shown.' in b
     p = json.loads((ROOT / "docs/results/precision_A.json").read_text())
     kept = sum(sum(r["items_kept"].values()) for r in json.loads((ROOT / "docs/results/eval_full_A.json").read_text())["runs"])
-    assert f"Sample: {p['n_items']} of the {kept} verified items from the three runs, drawn with seed 4242, rated by the author in a single pass." in b
+    assert (f"Sample: {p['n_items']} of the {kept} verified items from the three runs (the rating pack is capped at 40 items, `rating-pack --size`; the draw is stratified by type, "
+            "and after the cap it left out 1 running joke), drawn with seed 4242, rated by the author in a single pass.") in b
     assert "| overall | 40 | 21 of 40, 52.5%, interval 37.5% to 67.1% | 39 of 40, 97.5%, interval 87.1% to 99.6% |" in b
     assert "| run 1 |" in b and "| run 2 |" in b and "| run 3 |" in b and "2026110" not in b and "20261107T" not in b
     assert "The unplanted rows mix item types because awards have no planted truth, so planted against unplanted is not a like-for-like comparison." in b

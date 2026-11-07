@@ -31,7 +31,7 @@ def test_top_level_data_is_untracked_and_the_packaged_keyword_file_is_not():
 def test_the_named_mentions_are_gone_and_the_licence_text_is_otherwise_exact():
     hits = [h for h in pp.mentions(ROOT)]
     # the repository link in site/*.html (added in Phase 8c) is the one deliberate occurrence of the account name
-    assert not [h for h in hits if ("Prateek" in h or "devsuthar" in h.lower()) and not (h.startswith("site/") and "github.com/" + "devsu" + "tharsystems/group-chat-wrapped" in h)], hits
+    assert not [h for h in hits if ("Prateek" in h or "devsuthar" in h.lower()) and not (h.startswith(("site/", "README.md:")) and ("github.com/" + "devsu" + "tharsystems/group-chat-wrapped" in h or "devsu" + "tharsystems.github.io/group-chat-wrapped" in h))], hits  # the README badge and live-demo link (Phase 9a) are the other deliberate occurrences
     assert "the project brief" in (ROOT / "CLAUDE.md").read_text() and "the project brief" in (ROOT / "docs/PRD.md").read_text()
     lines = (ROOT / "LICENSE").read_text().split("\n")
     assert lines[0] == "MIT License" and lines[2] == "Copyright (c) 2026 Dev Suthar"

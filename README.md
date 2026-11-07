@@ -1,5 +1,9 @@
 # Group Chat Wrapped
 
+[![ci](https://github.com/devsutharsystems/group-chat-wrapped/actions/workflows/ci.yml/badge.svg)](https://github.com/devsutharsystems/group-chat-wrapped/actions/workflows/ci.yml)
+
+**Live demo:** https://devsutharsystems.github.io/group-chat-wrapped/ (the cards and the methodology page, built from the files in `site/`).
+
 ![A card built from the bundled synthetic chat: counted statistics on top, AI-found items below](docs/img/app_4_review_rendered_card.png)
 
 *A card from the bundled synthetic demo chat (no real chat). The AI items come from a saved model run and are auto-approved for this demo, with no human review; see the screenshots section.*
@@ -84,7 +88,7 @@ PLAYWRIGHT_BROWSERS_PATH=.cache/ms-playwright PYTHONPATH=src .venv/bin/streamlit
 
 All numbers below are generated from `docs/results/*.json` and memory logs by `scripts/build_readme_tables.py`; a test fails if they are stale. **Config A** is the only configuration evaluated: model `claude-haiku-5-5`, thinking disabled, effort low, prompt v1 frozen (identifiers below), evaluated on 2026-11-06 and 2026-11-07.
 
-**Tested on:** Python 3.15.0 and macOS 27.2 (M2, 8 GB) locally. CI passed on Python 3.11 and 3.13 on `ubuntu-latest`; the render tests ran with the runner's fonts, and the slow render tests are deselected in CI. The first CI run failed for a browser-path reason (Chromium was installed into a different folder than the code and tests use), which the next commit fixed. GitHub has announced that the `ubuntu-latest` label is migrating to Ubuntu 26, so CI results may change. There is no CI badge yet.
+**Tested on:** Python 3.15.0 and macOS 27.2 (M2, 8 GB) locally. CI passed on Python 3.11 and 3.13 on `ubuntu-latest`; the render tests ran with the runner's fonts, and the slow render tests are deselected in CI. The first CI run failed for a browser-path reason (Chromium was installed into a different folder than the code and tests use), which the next commit fixed. GitHub has announced that the `ubuntu-latest` label is migrating to Ubuntu 26, so CI results may change.
 
 Strict recall counts a planted item as found only when the verified evidence of one AI item sits mostly on that item's planted messages. Planted density is the share of payload messages that are planted lines.
 
@@ -99,6 +103,10 @@ Strict recall counts a planted item as found only when the verified evidence of 
 <!-- END:eval_table -->
 
 Rows with n = 1 are single observations. The large-chat rows hold the same planted lines as the dense chat in a longer chat, so planted density differs between rows (see the density column) and the rows are not a controlled comparison (`docs/results/compare_large.md`, `docs/results/diag_large_A.md`).
+
+<!-- BEGIN:hypothesis_note -->
+The hypothesis written in `docs/PRD.md` before any run (single-pass wins recall on long-range jokes) was not supported in the near-1M-token setup: single-pass found 0 of 10 planted items (`docs/results/eval_large_A.json`) and chunked found 5 of 10 (`docs/results/eval_large_chunked.json`), one run each (n = 1). Both runs read the same chat, whose planted density (0.39%) is lower than the dense chat's (1.30%), and the density is a confound for any comparison with the dense-chat results (`docs/results/compare_large.md`). This shows that the hypothesis failed in this setup; it is not a general claim about single-pass against chunked.
+<!-- END:hypothesis_note -->
 
 <!-- BEGIN:dropped_note -->
 Rule-compliant rate: the share of evidence items that pass verification (the message id exists, the quote has at least 12 characters, and it is an exact substring of the cited message). In the 3 dense single-pass runs (`docs/results/eval_full_A.json`) 8 evidence items were dropped. All of them have the status other_message, none is not_found or any other status: the quote was not in the cited message but was found in another message (defined in `src/gcw/evaluate.py`), so none was invented. The results file records the status counts only; it does not record whether each match was exact after normalisation or needed the classifier's second pass (a stronger fold of case and punctuation), so these quotes are not claimed to be verbatim.
@@ -151,7 +159,7 @@ Rubric (copied from `docs/PRD.md`; fixed before any rating):
 
 Standard applied: "true" when the shown quotes support the title and summary; "partly" when part of the claim or its detail is not shown.
 
-Sample: 40 of the 41 verified items from the three runs, drawn with seed 4242, rated by the author in a single pass. The author designed the dataset, so the ratings are not blind. Strict = rated true; lenient = true plus partly; Wilson 95% interval. The three runs are not independent samples: they read the same chat with the same prompt, so the same items and the same mistakes recur across runs and the intervals below understate the real uncertainty.
+Sample: 40 of the 41 verified items from the three runs (the rating pack is capped at 40 items, `rating-pack --size`; the draw is stratified by type, and after the cap it left out 1 running joke), drawn with seed 4242, rated by the author in a single pass. The author designed the dataset, so the ratings are not blind. Strict = rated true; lenient = true plus partly; Wilson 95% interval. The three runs are not independent samples: they read the same chat with the same prompt, so the same items and the same mistakes recur across runs and the intervals below understate the real uncertainty.
 
 | group | n | strict | lenient |
 |---|---|---|---|

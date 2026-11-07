@@ -223,7 +223,7 @@ def table_rows(name: str) -> list[list[str]]:
 
 
 def test_the_readme_wording_fixes_are_in_place():
-    hero = README.split("\n\n")[2]
+    hero = next(par for par in README.split("\n\n") if par.startswith("*A card from the bundled synthetic demo chat"))  # found by content: the badge and demo link sit above it
     assert "auto-approved for this demo, with no human review" in hero
     why = README.split("## Design choices", 1)[1].split("## Quickstart", 1)[0]
     assert "does not check whether the quotes support the item's title and summary" in why and "what the hand rating measures (see Precision below)" in why

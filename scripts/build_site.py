@@ -102,6 +102,7 @@ def methodology_html(readme: str, repo_url: str) -> str:
 {md_to_html(block(readme, "brief"))}
 <h2>Evaluation</h2>
 {md_to_html(block(readme, "eval_table"))}
+{md_to_html(block(readme, "hypothesis_note"))}
 {md_to_html(block(readme, "dropped_note"))}
 <p>Rows with n = 1 are single observations. The large-chat rows have a lower planted density than the dense chat, so the rows are not a controlled comparison.</p>
 <h2>Cost, latency and memory</h2>

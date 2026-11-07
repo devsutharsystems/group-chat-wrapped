@@ -16,8 +16,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 PRECISION_LITERAL = "Precision: not yet measured (hand-rating pending)"
-BLOCKS = ("brief", "eval_table", "dropped_note", "cost_block", "precision_block", "scale_limits", "versions")
+BLOCKS = ("brief", "eval_table", "hypothesis_note", "dropped_note", "cost_block", "precision_block", "scale_limits", "versions")
 RATING_SEED = 4242  # the default of `gcw rating-pack --seed` (a test checks it)
+RATING_CAP = 40  # the default of `gcw rating-pack --size` and of evaluate.build_rating_pack(total=...) (a test checks it)
 ROWS = [  # (label, results file, chat key, chunked)
     ("dense 270K tokens, single-pass", "eval_full_A", "dense", False),
     ("dense 270K tokens, chunked", "eval_full_chunked", "dense", True),
@@ -115,6 +116,21 @@ def rubric_lines(root: Path) -> list[str]:
     return out
 
 
+def cap_clause(root: Path, r: dict) -> str:
+    """Why the sample is smaller than the pool: the rating pack is capped at RATING_CAP items (`rating-pack --size`), so the stratified draw left some verified items out. From the code
+    (evaluate.TARGETS, allocate, build_rating_pack(total=40); cli --size default 40) and the counts in the results files; empty when nothing was left out."""
+    pool: dict[str, int] = {}
+    for run in _load(root, "eval_full_A")["runs"]:
+        for t, n in run["items_kept"].items():
+            pool[t] = pool.get(t, 0) + n
+    left = {t: pool[t] - r["by_type"][t]["n"] for t in pool if t in r["by_type"] and pool[t] > r["by_type"][t]["n"]}
+    if not left:
+        return ""
+    singular = {"running_jokes": "running joke", "moments": "moment", "awards": "award"}
+    names = ", ".join(f"{k} {singular.get(t, t)}{'' if k == 1 else 's'}" for t, k in sorted(left.items()))
+    return f" (the rating pack is capped at {RATING_CAP} items, `rating-pack --size`; the draw is stratified by type, and after the cap it left out {names})"
+
+
 def precision_block(root: Path) -> str:
     p = root / "docs" / "results" / "precision_A.json"
     if not p.is_file():
@@ -125,7 +141,7 @@ def precision_block(root: Path) -> str:
     moments_partly = r["by_type"]["moments"]["partly"]
     L = ["Rubric (copied from `docs/PRD.md`; fixed before any rating):", "", *rubric_lines(root), "",
          "Standard applied: \"true\" when the shown quotes support the title and summary; \"partly\" when part of the claim or its detail is not shown.", "",
-         f"Sample: {r['n_items']} of the {verified} verified items from the three runs, drawn with seed {RATING_SEED}, rated by the author in a single pass. The author designed the dataset, so the ratings are not blind. "
+         f"Sample: {r['n_items']} of the {verified} verified items from the three runs{cap_clause(root, r)}, drawn with seed {RATING_SEED}, rated by the author in a single pass. The author designed the dataset, so the ratings are not blind. "
          f"Strict = rated true; lenient = true plus partly; Wilson 95% interval. {r['note']}", "",
          "| group | n | strict | lenient |", "|---|---|---|---|", f"| overall | {o['n']} | {fmt_ci(o['strict'])} | {fmt_ci(o['lenient'])} |"]
     L += [f"| {t} | {v['n']} | {fmt_ci(v['strict'])} | {fmt_ci(v['lenient'])} |" for t, v in sorted(r["by_type"].items())]
@@ -162,6 +178,20 @@ def results_brief(root: Path) -> str:
     lines.append(f"- Large chat at {int(sum(x['input_tokens'] for x in big_s['runs']) / big_s['n_runs']):,} tokens (n = {big_s['n_runs']} run each; planted density {100 * dens['large']:.2f}% against {100 * dens['dense']:.2f}% on the dense chat, so the comparison is confounded): "
                  f"single-pass found {recall(big_s)} planted items, chunked {recall(big_c)}.")
     return "\n".join(lines)
+
+
+def hypothesis_note(root: Path) -> str:
+    """One short note on the near-1M experiment against the hypothesis written in docs/PRD.md before any run. Numbers come from the two results files."""
+    big_s, big_c = _load(root, "eval_large_A"), _load(root, "eval_large_chunked")
+    dens = _densities(root)
+
+    def found(r: dict) -> str:
+        return f"{sum(v['strict_found_item_runs'] for v in r['recall_by_type'].values())} of {sum(v['possible_item_runs'] for v in r['recall_by_type'].values())}"
+
+    return (f"The hypothesis written in `docs/PRD.md` before any run (single-pass wins recall on long-range jokes) was not supported in the near-1M-token setup: single-pass found {found(big_s)} planted items "
+            f"(`docs/results/eval_large_A.json`) and chunked found {found(big_c)} (`docs/results/eval_large_chunked.json`), one run each (n = {big_s['n_runs']}). Both runs read the same chat, whose planted density "
+            f"({100 * dens['large']:.2f}%) is lower than the dense chat's ({100 * dens['dense']:.2f}%), and the density is a confound for any comparison with the dense-chat results "
+            "(`docs/results/compare_large.md`). This shows that the hypothesis failed in this setup; it is not a general claim about single-pass against chunked.")
 
 
 def dropped_note(root: Path) -> str:
@@ -207,7 +237,7 @@ def versions(root: Path) -> str:
 
 
 def render_blocks(root: Path = ROOT) -> dict[str, str]:
-    return {"brief": results_brief(root), "eval_table": eval_table(root), "dropped_note": dropped_note(root), "cost_block": cost_block(root), "precision_block": precision_block(root),
+    return {"brief": results_brief(root), "eval_table": eval_table(root), "hypothesis_note": hypothesis_note(root), "dropped_note": dropped_note(root), "cost_block": cost_block(root), "precision_block": precision_block(root),
             "scale_limits": scale_limits(root), "versions": versions(root)}
 
 
