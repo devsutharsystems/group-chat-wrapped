@@ -40,6 +40,10 @@ def build_parser() -> argparse.ArgumentParser:
     an.add_argument("--budget", type=float, default=0.15, help="phase budget in USD over ledger labels starting 3b: (default 0.15)")
     an.add_argument("--save-response", action="store_true", help="also save the raw model response and the verified report under out/runs/ (OFF by default; they hold pseudonymised quotes, delete them afterwards)")
     an.add_argument("--phase", default="3b", help="ledger label prefix for the phase budget (default 3b)")
+    an.add_argument("--max-input-tokens", type=int, default=95_000, help="refuse a request with more input tokens than this (default 95000)")
+    an.add_argument("--max-run-cost", type=float, help="refuse if the worst-case cost estimate of one run is above this many USD")
+    an.add_argument("--require-frozen-dataset", action="store_true", help="verify_dataset() and the chat must be the frozen synthetic chat, checked first")
+    an.add_argument("--expect-prompt-version", metavar="PREFIX..SUFFIX", help="abort unless PROMPT_VERSION starts with PREFIX and ends with SUFFIX (it is always printed)")
     an.add_argument("--truth", help="ground_truth.json of a synthetic chat: score found planted items")
     an.add_argument("--label", default="slice", help="label suffix for the ledger entry")
     an.add_argument("--date-order", choices=["mdy", "dmy"], help="override the inferred day/month order")
@@ -55,6 +59,21 @@ def build_parser() -> argparse.ArgumentParser:
     cd.add_argument("--out", default="out/card.png", help="PNG path (default out/card.png)")
     cd.add_argument("--html", help="also write the card HTML here (debugging)")
     cd.add_argument("--date-order", choices=["mdy", "dmy"], help="override the inferred day/month order")
+    for name, hlp in (("evaluate", "FREE: evaluate saved full-chat runs against ground_truth.json; writes counts and ids only (no chat text)"),
+                      ("rating-pack", "FREE: a blind, seeded sample of verified items for hand-rating (out/rating/, gitignored)")):
+        ev = sub.add_parser(name, help=hlp)
+        ev.add_argument("chat", help="WhatsApp export (.txt) the runs were made on")
+        ev.add_argument("--aliases", required=True, help="aliases JSON used for the runs")
+        ev.add_argument("--truth", help="ground_truth.json of the synthetic chat" + ("" if name == "evaluate" else " (adds planted matches to the private key)"))
+        ev.add_argument("--phase", required=True, help="phase label of the runs to read (for example 4a)")
+        ev.add_argument("--config", default="A")
+        ev.add_argument("--runs-dir", default="out/runs")
+        if name == "evaluate":
+            ev.add_argument("--out", default="docs/results/eval_full_A", help="output base path (.json and .md are written; counts and ids only)")
+        else:
+            ev.add_argument("--out", default="out/rating")
+            ev.add_argument("--seed", type=int, default=4242)
+            ev.add_argument("--size", type=int, default=40)
     rv = sub.add_parser("review", help="list, approve or reject the items of a saved run (the card renders approved items only)")
     rv.add_argument("report", help="run log JSON (its sibling .report.json holds the verified report)")
     rv.add_argument("--file", help="review file (default out/reviews/<run>.json)")
@@ -62,6 +81,69 @@ def build_parser() -> argparse.ArgumentParser:
     rv.add_argument("--reject", nargs="*", default=[], metavar="ID")
     rv.add_argument("--rank", nargs="*", default=[], metavar="ID=N", help="optional integer rank per item (lower shows first; default is the model's order)")
     return ap
+
+
+def _saved_runs(args: argparse.Namespace):
+    """([(name, log, raw report)], df, aliases, truth) for the evaluate / rating-pack commands, or an exit code."""
+    import json
+
+    from gcw import evaluate, privacy
+    from gcw.parser import messages
+
+    chat = Path(args.chat)
+    if not chat.is_file():
+        print(f"gcw: chat file not found: {chat}", file=sys.stderr)
+        return 2
+    try:
+        aliases = privacy.load_aliases(args.aliases)
+        truth = json.loads(Path(args.truth).read_text(encoding="utf-8"))["items"] if args.truth else None
+    except (OSError, ValueError, KeyError) as e:
+        print(f"gcw: {e}", file=sys.stderr)
+        return 2
+    files = evaluate.pick_runs(args.runs_dir, args.phase, args.config)
+    if not files:
+        print(f"gcw: no saved runs of phase {args.phase}, config {args.config} in {args.runs_dir} (runs need --save-response)", file=sys.stderr)
+        return 3
+    df, _ = parse_chat(chat)
+    n_chat = int(messages(df).shape[0])
+    runs = []
+    for f in files:
+        log, rep = evaluate.load_run(f)
+        if log.get("messages") != n_chat:
+            print(f"gcw: run {f.name} has {log.get('messages')} messages but this chat has {n_chat}", file=sys.stderr)
+            return 3
+        runs.append((f.stem, log, rep))
+    return runs, df, aliases, truth
+
+
+def evaluate_cmd(args: argparse.Namespace) -> int:
+    from gcw import evaluate
+
+    got = _saved_runs(args)
+    if isinstance(got, int):
+        return got
+    runs, df, aliases, truth = got
+    if truth is None:
+        print("gcw: --truth is required for evaluate", file=sys.stderr)
+        return 2
+    res = evaluate.evaluate_runs(df, aliases, runs, truth)
+    j, m = evaluate.write_results(res, args.out)
+    print(f"gcw: evaluated {res['n_runs']} runs; wrote {j} and {m} (counts and ids only)")
+    return 0
+
+
+def rating_pack_cmd(args: argparse.Namespace) -> int:
+    from gcw import evaluate
+
+    got = _saved_runs(args)
+    if isinstance(got, int):
+        return got
+    runs, df, aliases, truth = got
+    pack = evaluate.build_rating_pack(df, aliases, runs, truth, seed=args.seed, total=args.size)
+    paths = evaluate.write_rating_pack(pack, args.out)
+    print(f"gcw: rating pack of {len(pack['items'])} items (pool {pack['key']['pool']}, drawn {pack['key']['drawn']}, seed {args.seed}); wrote {', '.join(str(p) for p in paths.values())}")
+    print("gcw: key.json holds run origin and planted matches: do not open it before rating")
+    return 0
 
 
 def _report_of(run_json: str):
@@ -211,11 +293,27 @@ def analyze_cmd(args: argparse.Namespace) -> int:
 
     from gcw import analyze as az
     from gcw import cost, privacy
-
     chat = Path(args.chat)
     if not chat.is_file():
         print(f"gcw: chat file not found: {chat}", file=sys.stderr)
         return 2
+    print(f"prompt version: {az.PROMPT_VERSION}")
+    if args.expect_prompt_version:
+        pre, _, suf = args.expect_prompt_version.partition("..")
+        if not (az.PROMPT_VERSION.startswith(pre) and az.PROMPT_VERSION.endswith(suf)):
+            print(f"gcw: PROMPT_VERSION {az.PROMPT_VERSION} does not match the expected {args.expect_prompt_version}: prompt v1 is frozen", file=sys.stderr)
+            return 3
+    if args.require_frozen_dataset:
+        from gcw import dataset
+
+        try:
+            dataset.verify_dataset()
+        except dataset.DatasetError as e:
+            print(f"gcw: {e}", file=sys.stderr)
+            return 3
+        if not dataset.is_frozen_chat(chat):
+            print("gcw: --require-frozen-dataset: the chat is not the frozen synthetic chat", file=sys.stderr)
+            return 3
     aliases = None
     if args.aliases:
         try:
@@ -239,7 +337,7 @@ def analyze_cmd(args: argparse.Namespace) -> int:
     try:
         res = az.run_analysis(df, aliases, config=args.config, slice_start=args.slice_start, slice_end=args.slice_end, confirm=args.confirm,
                               count_only=args.count, budget=args.budget, truth_items=truth, label_suffix=args.label,
-                              phase=args.phase, save_response=args.save_response)
+                              phase=args.phase, save_response=args.save_response, max_input_tokens=args.max_input_tokens, max_run_cost=args.max_run_cost)
     except (az.AnalysisError, cost.CostError, OSError, RuntimeError) as e:
         print(f"gcw: {e}", file=sys.stderr)
         return 3
@@ -313,6 +411,10 @@ def main(argv: list[str] | None = None) -> int:
         return analyze_cmd(args)
     if args.cmd == "card":
         return card_cmd(args)
+    if args.cmd == "evaluate":
+        return evaluate_cmd(args)
+    if args.cmd == "rating-pack":
+        return rating_pack_cmd(args)
     if args.cmd == "review":
         return review_cmd(args)
     chat = Path(args.chat)

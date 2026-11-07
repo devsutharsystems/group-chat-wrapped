@@ -159,7 +159,7 @@ def prepare(df: pd.DataFrame, aliases: privacy.Aliases | None, *, slice_start: s
 def run_analysis(df: pd.DataFrame, aliases: privacy.Aliases | None, *, config: str, slice_start: str | None = None, slice_end: str | None = None,
                  client: Any = None, guard: cost.CostGuard | None = None, confirm: bool = False, count_only: bool = False,
                  budget: float = PHASE_BUDGET_USD, out_dir: str | Path = "out/runs", truth_items: list[dict] | None = None, label_suffix: str = "slice",
-                 keywords=None, phase: str = "3b", save_response: bool = False) -> dict:
+                 keywords=None, phase: str = "3b", save_response: bool = False, max_input_tokens: int = TOKEN_STOP, max_run_cost: float | None = None) -> dict:
     """Offline unless `count_only` (exact count_tokens, free, SENDS the payload) or `confirm` (count, then generate). Returns a result dict."""
     prep = prepare(df, aliases, slice_start=slice_start, slice_end=slice_end, keywords=keywords)
     req = build_request(prep["payload_text"], config, prep["members"])
@@ -174,8 +174,10 @@ def run_analysis(df: pd.DataFrame, aliases: privacy.Aliases | None, *, config: s
     n_tokens = int(client.messages.count_tokens(**_count_kwargs(req)).input_tokens)
     estimate = cost.estimate_usd(n_tokens, MAX_TOKENS)
     result.update(request_tokens=n_tokens, worst_case_cost_usd=round(estimate, 6))
-    if n_tokens > TOKEN_STOP:
-        raise AnalysisError(f"refused: the request is {n_tokens} tokens, over the {TOKEN_STOP} stop")
+    if n_tokens > max_input_tokens:
+        raise AnalysisError(f"refused: the request is {n_tokens} tokens, over the {max_input_tokens} stop")
+    if max_run_cost is not None and estimate > max_run_cost:
+        raise AnalysisError(f"refused: the worst-case estimate ${estimate:.4f} for one run is over the ${max_run_cost:.2f} stop")
     if count_only and not confirm:
         return result
     return _generate(result, req, prep, client, guard, config, confirm, budget, Path(out_dir), truth_items, label_suffix, phase, save_response)
