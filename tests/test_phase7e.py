@@ -130,10 +130,57 @@ def test_the_history_paragraph_cites_the_prediction_commits_from_the_commit_map(
     assert "personal email addresses" in sec and "no-reply" in sec and "one to one" in sec and "docs/results/commit_map.md" in sec
 
 
+MAP_ROWS = 49  # a constant recorded at rewrite time (Phase 8a): the commit map covers the first 49 commits; commits made later are not in it
+ME = "Dev Suthar <209331458+" + "devsu" + "tharsystems" + chr(64) + "users.noreply.github.com>"  # built from parts so the repo's own mentions check does not flag this file
+
+
+def _git_out(root, *args) -> str:
+    return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True).stdout
+
+
+def check_commit_map(root) -> None:
+    """The commit map and the identity rule, for any clone of this repository with its full history (CI uses fetch-depth 0). It does not depend on how many commits came after
+    the rewrite: the map's new hashes must be the FIRST MAP_ROWS commits of the history, in order; the old hashes must be gone from it; every commit has one identity."""
+    rows = re.findall(r"^\| ([0-9a-f]{40}) \| ([0-9a-f]{40}) \|", (root / "docs/results/commit_map.md").read_text(), re.M)
+    olds, news = [o for o, _ in rows], [n for _, n in rows]
+    assert len(rows) == MAP_ROWS  # (a)
+    chain = _git_out(root, "rev-list", "--reverse", "HEAD").split()
+    assert len(chain) >= MAP_ROWS and news == chain[:MAP_ROWS]  # (b) one to one and order preserving
+    assert len(set(olds)) == len(olds) and all(o != n for o, n in rows)  # (c) old hashes are unique and differ from the new ones ...
+    for o in olds:  # ... and none is an ancestor of HEAD: a non-zero exit (not an ancestor, or an object that no longer exists) is what is required
+        assert subprocess.run(["git", "-C", str(root), "merge-base", "--is-ancestor", o, "HEAD"], capture_output=True).returncode != 0, o
+    ids = set(_git_out(root, "log", "--all", "--format=%an <%ae>|%cn <%ce>").split("\n")) - {""}
+    assert ids == {ME + "|" + ME}  # (d) one author and committer identity across all history
+
+
 def test_the_commit_map_is_complete_and_the_rewrite_left_one_identity():
-    rows = re.findall(r"^\| ([0-9a-f]{40}) \| ([0-9a-f]{40}) \|", (ROOT / "docs/results/commit_map.md").read_text(), re.M)
-    n = int(subprocess.run(["git", "-C", str(ROOT), "rev-list", "--count", "HEAD"], capture_output=True, text=True).stdout)
-    assert len(rows) in (n, n - 1, n - 2, n - 3) and len({o for o, _ in rows}) == len(rows) and all(o != nw for o, nw in rows)  # later commits are not in the map
-    ids = set(subprocess.run(["git", "-C", str(ROOT), "log", "--all", "--format=%an <%ae>|%cn <%ce>"], capture_output=True, text=True).stdout.split("\n")) - {""}
-    me = "Dev Suthar <209331458+" + "devsu" + "tharsystems" + chr(64) + "users.noreply.github.com>"  # built from parts so the repo's own mentions check does not flag this file
-    assert ids == {me + "|" + me}
+    check_commit_map(ROOT)
+
+
+def test_the_commit_map_check_survives_new_commits_and_catches_a_foreign_author(tmp_path):
+    clone = tmp_path / "clone"
+    subprocess.run(["git", "clone", "-q", "--no-hardlinks", str(ROOT), str(clone)], check=True, capture_output=True)
+    ident = ["-c", "user.name=Dev Suthar", "-c", "user.email=" + ME.split("<")[1].rstrip(">")]
+    for k in range(5):  # history grows: the check does not care
+        subprocess.run(["git", "-C", str(clone), *ident, "commit", "-q", "--allow-empty", "-m", f"later commit {k}"], check=True, capture_output=True)
+    check_commit_map(clone)
+    other = ["-c", "user.name=Someone Else", "-c", "user.email=someone" + chr(64) + "example.com"]
+    subprocess.run(["git", "-C", str(clone), *other, "commit", "-q", "--allow-empty", "-m", "a commit by another identity"], check=True, capture_output=True)
+    with pytest.raises(AssertionError):
+        check_commit_map(clone)
+    assert _git_out(clone, "rev-list", "--count", "HEAD").strip() == str(int(_git_out(ROOT, "rev-list", "--count", "HEAD")) + 6)
+
+
+def test_no_tracked_file_outside_the_map_still_names_a_pre_rewrite_commit_hash():
+    """Guards against stale hashes after the history rewrite (the sweep of Phase 8e found three in a script's usage example)."""
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import update_hash_refs as uh
+
+    mapping = uh.load_map(ROOT / "docs/results/commit_map.md")
+    stale = []
+    for f in [x for x in _git_out(ROOT, "ls-files", "-z").split("\0") if x and x != "docs/results/commit_map.md"]:
+        if not f.endswith((".py", ".md", ".json", ".sh", ".yml", ".toml", ".txt", ".html")):
+            continue
+        for n, line in enumerate((ROOT / f).read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+            stale += [f"{f}:{n} {m.group()}" for m in uh.SHORT.finditer(line) if m.group() in mapping]
+    assert stale == []

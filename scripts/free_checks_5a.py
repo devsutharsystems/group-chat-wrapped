@@ -3,7 +3,7 @@
   (b) eval_full_A.json across the `mode` field change: identical except `mode`
   (c) planted jokes: occurrences and distinct dates per chunk of the exact chunked plan, and which chunks satisfy the joke rule alone
   (d) where planted items were lost in the chunked runs
-  .venv/bin/python scripts/free_checks_5a.py --old 959b194 --before-mode 43c1224 --after-mode 40bd887 --chat ... --aliases ... --truth ... --phase 4b"""
+  .venv/bin/python scripts/free_checks_5a.py --old 35a521f --before-mode 4cf2c38 --after-mode d678cbc --chat ... --aliases ... --truth ... --phase 4b"""
 from __future__ import annotations
 
 import argparse
