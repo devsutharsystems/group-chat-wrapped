@@ -31,7 +31,7 @@ def test_config_a_and_the_tested_on_line_match_the_code_and_the_ci_matrix():
     ci = (ROOT / ".github/workflows/ci.yml").read_text()
     versions = re.search(r"python-version: \[(.*?)\]", ci).group(1)
     assert "'3.11'" in versions and "'3.13'" in versions
-    assert "**Tested on:** Python 3.15.0 and macOS" in ev and "CI is configured for Python 3.11 and 3.13 and has not run yet, so there is no badge" in ev
+    assert "**Tested on:** Python 3.15.0 and macOS" in ev and "has not run yet" not in README  # CI has run since Phase 8b; the wording is checked in tests/test_phase8c.py
     assert "![ci" not in README.lower() and "badge.svg" not in README.lower()
 
 

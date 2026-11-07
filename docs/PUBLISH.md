@@ -1,8 +1,8 @@
 # Publish checklist (in order)
 
-Nothing here has been run. `python scripts/prepublish_check.py` prints one PASS or FAIL line per check; publish only when every blocking check passes. CLAUDE.md applies: no `git remote` and no `git push` until you have seen the exact command and approved it.
+Status after Phase 8c: steps 1 to 8 are done (ratings and precision, README tables, history rewrite and hash references, the push to a private repository, CI green on Python 3.11 and 3.13). Remaining: a final read of the README, the public flip (step 9) and enabling Pages (step 10). `python scripts/prepublish_check.py` prints one PASS or FAIL line per check; publish only when every blocking check passes. CLAUDE.md applies: no `git remote` and no `git push` until you have seen the exact command and approved it.
 
-**Status after Phase 8a:** steps 4 and 5 are done (history rewritten once, hash references updated, `docs/results/commit_map.md` committed); the blockers `commit_map.md exists` and `history: no build artefacts` below are cleared. The table is kept as the record of what each check guards.
+**Earlier status (Phase 8a):** steps 4 and 5 are done (history rewritten once, hash references updated, `docs/results/commit_map.md` committed); the blockers `commit_map.md exists` and `history: no build artefacts` below are cleared. The table is kept as the record of what each check guards.
 
 ## Blockers today (the checks that fail, by their printed names)
 
@@ -28,7 +28,7 @@ Nothing here has been run. `python scripts/prepublish_check.py` prints one PASS 
 9. **Public flip.** GitHub Pages needs a public repository on the Free plan (https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-github-pages-site).
 10. **Pages enable.** Settings, Pages, Build and deployment, Source: GitHub Actions (a branch source can only publish `/` or `/docs`: https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site). `.github/workflows/pages.yml` then publishes the committed `site/` folder unchanged. Rebuild `site/` with `python scripts/build_site.py --repo-url <the public URL>` once the URL exists.
 
-## Commands for later (NOT run)
+## Commands (the create, remote and push commands were run by the owner; the public flip and Pages are NOT run)
 
 ```sh
 gh repo create group-chat-wrapped --private                                # empty private repository under the logged-in account

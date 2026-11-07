@@ -82,7 +82,7 @@ PLAYWRIGHT_BROWSERS_PATH=.cache/ms-playwright PYTHONPATH=src .venv/bin/streamlit
 
 All numbers below are generated from `docs/results/*.json` and memory logs by `scripts/build_readme_tables.py`; a test fails if they are stale. **Config A** is the only configuration evaluated: model `claude-haiku-5-5`, thinking disabled, effort low, prompt v1 frozen (identifiers below), evaluated on 2026-11-06 and 2026-11-07.
 
-**Tested on:** Python 3.15.0 and macOS 27.2 (M2, 8 GB) locally. CI is configured for Python 3.11 and 3.13 and has not run yet, so there is no badge.
+**Tested on:** Python 3.15.0 and macOS 27.2 (M2, 8 GB) locally. CI passed on Python 3.11 and 3.13 on `ubuntu-latest`; the render tests ran with the runner's fonts, and the slow render tests are deselected in CI. The first CI run failed for a browser-path reason (Chromium was installed into a different folder than the code and tests use), which the next commit fixed. GitHub has announced that the `ubuntu-latest` label is migrating to Ubuntu 26, so CI results may change. There is no CI badge yet.
 
 Strict recall counts a planted item as found only when the verified evidence of one AI item sits mostly on that item's planted messages. Planted density is the share of payload messages that are planted lines.
 
@@ -222,7 +222,8 @@ The review source is a saved config A run on the synthetic chat that I judged to
 - Names, nicknames and surnames that are not listed in the aliases file leak into the text sent to Anthropic; names that are common words need `case_sensitive`; non-Latin scripts are untested.
 - Android multi-line messages, iOS exports and 24-hour formats were tested on generated data only, not on real exports (`docs/PRD.md` section 8).
 - Costs are computed from the usage fields times list prices and are not reconciled with the Console; a request above 100,000 prompt tokens is billed whole at the higher tier.
-- Everything was developed and checked on macOS (M2, 8 GB). Cards need a colour emoji font on Linux; this is unverified. The rendered cards were checked with Apple Color Emoji only.
+- Everything was developed and checked on macOS (M2, 8 GB). On Linux, the layout tests of the card passed on the CI runner (`ubuntu-latest`, Python 3.11 and 3.13, runner fonts); emoji appearance on Linux was not inspected, and the rendered cards were checked visually with Apple Color Emoji only, so whether a colour emoji font is present and used on Linux is not known.
+- CI covers the fast tests, the repository scan and the pre-publish checks on `ubuntu-latest`; the slow render tests are deselected there. The `ubuntu-latest` label is migrating to Ubuntu 26, so a later run may behave differently.
 - One config (A) and one prompt version (v1) were evaluated; the other configs differ only through the effort setting.
 
 ## History and publishing

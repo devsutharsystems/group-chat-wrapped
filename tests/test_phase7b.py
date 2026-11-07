@@ -114,7 +114,7 @@ def test_the_site_loads_nothing_external_and_has_no_script():
         assert not re.search(r"<script|<iframe|<object|<embed|@import|url\(\s*['\"]?https?:|<link\b[^>]*href=['\"]?https?:", h, re.I), name
         assert not re.search(r"<(img|source|video|audio)\b[^>]*\bsrc=['\"]?(https?:)?//", h, re.I), name
         assert "<link" not in h.lower() or 'rel="stylesheet"' not in h.lower()
-        assert "http://" not in h and "https://" not in re.sub(r'<a href="https://[^"]*">', "", h)  # a plain link is the only place a URL may appear
+        assert "http://" not in h and "https://" not in re.sub(r'<a href="https://[^"]*">[^<]*</a>', "", h)  # a plain link (the repository link) is the only place a URL may appear
         assert "google" not in h.lower() and "analytics" not in h.lower()
 
 
