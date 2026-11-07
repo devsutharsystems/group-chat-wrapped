@@ -403,6 +403,11 @@ def card_cmd(args: argparse.Namespace) -> int:
             except review.ReviewError as e:
                 print(f"gcw: {e}", file=sys.stderr)
                 return 2
+        try:
+            review.check_mode(rv, dataset.is_frozen_chat(chat))
+        except review.ReviewError as e:
+            print(f"gcw: {e}", file=sys.stderr)
+            return 2
         approved = review.apply(rep, rv)
         k = sum(len(approved[t]) for t in review.TYPES)
         display_map = aliases_dict or {}
@@ -410,7 +415,7 @@ def card_cmd(args: argparse.Namespace) -> int:
         stat = log.get("stats", {})
         zone = display.build_zone2(approved, prep["index"], names)
         ai = {"zone2": zone, "approved": k, "proposed": stat.get("items_in", 0), "verified": stat.get("items_kept", sum(len(rep.get(t) or []) for t in review.TYPES)),
-              "synthetic": bool(args.auto_approve_synthetic)}
+              "synthetic": review.mode_of(rv) == "auto-synthetic"}
         print(f"gcw: AI items: proposed {ai['proposed']}, verified {ai['verified']}, approved {k}; dropped at display {zone['display_drops']}", file=sys.stderr)
         if rv is None:
             print("gcw: nothing is approved yet: run `python -m gcw review RUN_JSON --approve ID ...`, then pass --review FILE", file=sys.stderr)

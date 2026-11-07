@@ -274,33 +274,61 @@ def step_review():
     rv = S("review") or review.new_review(report, "app")
     rv = review.merge(rv, report)
     st.session_state["review"] = rv
+    kept = {t: len(report.get(t) or []) for t in review.TYPES}
+    st.text(f"Verified items: {sum(kept.values())} (running jokes {kept['running_jokes']}, moments {kept['moments']}, awards {kept['awards']})")
+    state_line = st.empty()
     st.caption("Only approved items render on the card. Pending and rejected items never do.")
+    if appcore.is_frozen_text(S("text") or "") and st.button("Auto-approve all (synthetic demo only)", key="auto_approve"):
+        auto = appcore.auto_approve_all(report, "app", S("text"))
+        for iid, meta in auto["items"].items():
+            rv["items"][iid]["status"] = meta["status"]
+            st.session_state[f"dec_{iid}"] = "approved"  # set before the radios are created in this run
+        rv["approval_mode"] = auto["approval_mode"]
+
+    def quote_line(ev: dict) -> str:
+        row = index.get(ev.get("message_id", ""))
+        who = names.get(row["sender"], row["sender"]) if row else "?"
+        when = f"{row['ts']:%Y-%m-%d}" if row else ""
+        return f'{who}, {when}: "{display.detokenise(str(ev.get("quote", "")), names)}"'
+
+    def context_text(ev: dict) -> str:
+        return "\n".join(("> " if m["is_target"] else "  ") + f"{m['when']} {m['who']}: {m['text']}" for m in appcore.context(rows, ev.get("message_id", ""), names))
+
     for iid, typ, item in appcore.item_ids(report):
         st.divider()
         st.text(f"{typ.replace('_', ' ')}: {display.detokenise(str(item.get('title') or item.get('award') or ''), names)}")
         st.text(display.detokenise(str(item.get("summary", "")), names))
-        for n, ev in enumerate(item.get("evidence") or []):
-            row = index.get(ev.get("message_id", ""))
-            who = names.get(row["sender"], row["sender"]) if row else "?"
-            when = f"{row['ts']:%Y-%m-%d}" if row else ""
-            st.text(f'  {who}, {when}: "{display.detokenise(str(ev.get("quote", "")), names)}"')
-            with st.expander(f"Context around evidence {n + 1}", expanded=False):
-                st.text("\n".join(("> " if m["is_target"] else "  ") + f"{m['when']} {m['who']}: {m['text']}" for m in appcore.context(rows, ev.get("message_id", ""), names)))
+        evs = [e for e in (item.get("evidence") or []) if isinstance(e, dict)]
+        if evs:
+            st.text(quote_line(evs[0]))  # the first quote, then the controls; everything else is inside expanders
         a, b = st.columns([3, 1])
-        status = a.radio("Decision", ["pending", "approved", "rejected"], index=["pending", "approved", "rejected"].index(rv["items"][iid]["status"]), key=f"dec_{iid}", horizontal=True)
+        key = f"dec_{iid}"
+        kw = {} if key in st.session_state else {"index": ["pending", "approved", "rejected"].index(rv["items"][iid]["status"])}
+        status = a.radio("Decision", ["pending", "approved", "rejected"], key=key, horizontal=True, **kw)
         rank = b.number_input("Rank (0 = model order)", min_value=0, max_value=99, value=int(rv["items"][iid].get("rank") or 0), key=f"rank_{iid}")
+        if status != rv["items"][iid]["status"]:
+            review.set_human(rv)  # a manual decision after an auto-approval makes the approvals human again
         review.set_status(rv, [iid], status)
         review.set_rank(rv, iid, int(rank) or None)
+        if evs:
+            with st.expander("Context around the first quote", expanded=False):
+                st.text(context_text(evs[0]))
+        if len(evs) > 1:
+            with st.expander(f"{len(evs) - 1} more quote{'s' if len(evs) > 2 else ''}", expanded=False):
+                for ev in evs[1:]:
+                    st.text(quote_line(ev))
+                    st.text(context_text(ev))
     k = review.counts(report, rv)
-    st.text(f"Review state: {k}")
+    state_line.text(f"Review state: {k}; approvals made by: {review.mode_of(rv)}")
     if st.button("Render card", key="render_review"):
         try:
+            review.check_mode(rv, appcore.is_frozen_text(S("text") or ""))
             with st.spinner("Rendering"):
                 ai = appcore.zone_for(report, rv, index, mapping, S("aliases"), stats, proposed=None if S("ai_result") else S("proposed"))
                 html = appcore.card_html(df, S("aliases"), since, until, view["date_order"] if view["ambiguous"] else None, ai=ai)
                 st.session_state["review_png"] = appcore.render_png_bytes(html)
                 appcore.save_safe_review(rv, "app")
-        except appcore.AppError as e:
+        except (appcore.AppError, review.ReviewError) as e:
             st.error(str(e))
     if S("review_png"):
         st.image(S("review_png"), width=720)

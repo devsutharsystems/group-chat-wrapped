@@ -18,7 +18,7 @@ from typing import Any, Callable
 
 import pandas as pd
 
-from gcw import analyze, card, chunked, cost, display, llm, privacy, review, verify
+from gcw import analyze, card, chunked, cost, dataset, display, llm, privacy, review, verify
 from gcw.parser import messages, parse_chat
 from gcw.stats import compute_stats
 
@@ -288,9 +288,27 @@ def context(rows: list[dict], pid: str, names: dict[str, str], k: int = 2) -> li
     return out
 
 
+def is_frozen_text(text: str) -> bool:
+    """True only for the bundled frozen synthetic chat: the text's SHA-256 equals the hard-coded constant and the frozen dataset verifies."""
+    import hashlib
+
+    try:
+        dataset.verify_dataset()
+    except (dataset.DatasetError, OSError):
+        return False
+    return hashlib.sha256(text.encode("utf-8")).hexdigest() == dataset.CHAT_SHA256
+
+
+def auto_approve_all(report: dict, run: str, chat_text: str) -> dict:
+    """Approve every item (approval_mode auto-synthetic). Refused unless the loaded chat is the frozen synthetic chat."""
+    if not is_frozen_text(chat_text):
+        raise AppError("auto-approval is only allowed for the bundled synthetic demo chat")
+    return review.approve_all(report, run)
+
+
 def safe_review(rv: dict) -> dict:
-    """What may be written to disk: item ids, types and statuses (and ranks) only, no titles."""
-    return {"version": rv.get("version"), "run": rv.get("run", ""), "items": {i: {k: v[k] for k in ("type", "status", "rank") if k in v} for i, v in rv["items"].items()}}
+    """What may be written to disk: item ids, types, statuses, ranks and the approval mode only, no titles."""
+    return {"version": rv.get("version"), "run": rv.get("run", ""), "approval_mode": review.mode_of(rv), "items": {i: {k: v[k] for k in ("type", "status", "rank") if k in v} for i, v in rv["items"].items()}}
 
 
 def save_safe_review(rv: dict, run: str, out_dir: str | Path = OUT_DIR) -> Path:
@@ -300,8 +318,8 @@ def save_safe_review(rv: dict, run: str, out_dir: str | Path = OUT_DIR) -> Path:
     return p
 
 
-def zone_for(report: dict, rv: dict, index: dict, mapping: dict[str, str], aliases: privacy.Aliases | None, stats: dict, synthetic: bool = False, proposed: int | None = None) -> dict:
+def zone_for(report: dict, rv: dict, index: dict, mapping: dict[str, str], aliases: privacy.Aliases | None, stats: dict, proposed: int | None = None) -> dict:
     approved = review.apply(report, rv)
     zone = display.build_zone2(approved, index, names_for(mapping, aliases))
     return {"zone2": zone, "approved": sum(len(approved[t]) for t in review.TYPES), "proposed": proposed if proposed is not None else sum((stats.get("items_in_by_type") or {}).values()),
-            "verified": sum(len(report.get(t) or []) for t in review.TYPES), "synthetic": synthetic}
+            "verified": sum(len(report.get(t) or []) for t in review.TYPES), "synthetic": review.mode_of(rv) == "auto-synthetic"}  # the footer wording follows the review file's approval_mode

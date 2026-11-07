@@ -31,7 +31,8 @@ def test_every_memory_entry_has_provenance_and_the_ranges_match_the_observations
         assert [x["mb"] for x in s["provenance"]] == s["observed_mb"]
         assert all({"run", "phase", "measured_on", "copied_from_session_output"} <= set(x) for x in s["provenance"])
     sc = steps["stats card (browser + server + render child)"]
-    assert sc["observed_mb"] == [1116, 1135, 1171] and (sc["min_mb"], sc["max_mb"]) == (1116, 1171)
+    assert sc["observed_mb"] == [1015, 1114, 1116, 1121, 1135, 1167, 1171] and (sc["min_mb"], sc["max_mb"]) == (1015, 1171)
+    assert sorted({x["phase"] for x in sc["provenance"]}) == ["6-fix", "6-fix2", "6-fix3", "6-fix4"]
     # no number was changed: the single observations are the values recorded before this phase
     assert {k: v["observed_mb"] for k, v in steps.items() if k != "stats card (browser + server + render child)"} == {
         "server start": [198], "browser start": [704], "payload preview (browser + server)": [814], "review (browser + server)": [959],
@@ -41,7 +42,7 @@ def test_every_memory_entry_has_provenance_and_the_ranges_match_the_observations
 
 def test_the_readme_memory_block_shows_the_ranges():
     block = re.search(r"<!-- BEGIN:cost_block -->\n(.*?)\n<!-- END:cost_block -->", (ROOT / "README.md").read_text(), re.S).group(1)
-    assert "| 1,116, 1,135, 1,171 | 1,116 | 1,171 |" in block and "copied from session output: yes" in block
+    assert "| 1,015, 1,114, 1,116, 1,121, 1,135, 1,167, 1,171 | 1,015 | 1,171 |" in block and "copied from session output: yes" in block
     assert btab.stale(ROOT) == []
 
 
@@ -151,8 +152,8 @@ def test_the_committed_methodology_page_matches_the_readme_blocks():
 def test_the_site_cards_are_the_cards_the_cli_renders_for_the_demo_chat():
     import hashlib
 
-    assert hashlib.sha256((ROOT / "site/img/stats_card.png").read_bytes()).hexdigest() == "c910ba35b229f37e6c9eb2b0b0c75c61c65cec657c8a02bbfcc8fb34fb51994d"  # the hash the app and CLI renders gave
-    assert hashlib.sha256((ROOT / "site/img/ai_card.png").read_bytes()).hexdigest() == "a7e6f9f161c7d03765f74d4d08f438120def39fe7d7a838246af16d127a299ce"
+    assert hashlib.sha256((ROOT / "site/img/stats_card.png").read_bytes()).hexdigest() == "c910ba35b229f37e6c9eb2b0b0c75c61c65cec657c8a02bbfcc8fb34fb51994d"  # the hash the app and CLI renders gave (the AI card changed in Phase 7d: stopword-safe award summary and the approval_mode footer)
+    assert hashlib.sha256((ROOT / "site/img/ai_card.png").read_bytes()).hexdigest() == "028862cd39c37b6fff704648b39004379ea08980d094c4e6b006c97f29cd223a"
 
 
 # ---------------------------------------------------------------- hygiene

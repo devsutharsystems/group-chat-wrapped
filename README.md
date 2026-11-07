@@ -2,15 +2,15 @@
 
 ![A card built from the bundled synthetic chat: counted statistics on top, AI-found items below](docs/img/app_4_review_rendered_card.png)
 
-*A card from the bundled synthetic demo chat (no real chat). The AI items were loaded from a saved model run and approved in the review step; see the screenshots section for what that means.*
+*A card from the bundled synthetic demo chat (no real chat). The AI items come from a saved model run and are auto-approved for this demo, with no human review; see the screenshots section.*
 
 Group Chat Wrapped turns a WhatsApp group export into a one-page card: counted statistics (top talkers, busiest day, longest silence, response times and so on) and, optionally, items found by a language model (running jokes, moments, awards). It is a Python package (pandas, Playwright for rendering, Claude Haiku for the AI step) with a command-line interface and a local Streamlit app.
 
 ## Why it differs from common WhatsApp analysers
 
-1. **Every AI claim is checked in code against the real message.** A running joke, moment or award is kept only if each of its evidence quotes is an exact substring of the cited message, and if it meets the item rules (a joke needs several quotes on more than one date). Items that fail are dropped, and the drop counts by reason are reported in the run output and in `docs/results/`. A claim the model cannot back with a real quote does not reach the card.
+1. **Every AI claim is checked in code against the real message.** A running joke, moment or award is kept only if each of its evidence quotes is an exact substring of the cited message, and if it meets the item rules (a joke needs several quotes on more than one date). Items that fail are dropped, and the drop counts by reason are reported in the run output and in `docs/results/`. A claim the model cannot back with a real quote does not reach the card. What the code checks is that every kept quote exists in the cited message and meets the item rules; it does not check whether the quotes support the item's title and summary. That is what the hand rating will measure.
 2. **Privacy by design, with the limits stated.** Names are replaced before anything is sent, a keyword screen withholds sensitive messages, and `preview` shows the exact text that would be sent. Stats-only mode (the default) makes no network call. AI mode needs an explicit consent step and runs under a cost cap. Pseudonymised text is still sent to Anthropic in AI mode; see the privacy section.
-3. **A measured evaluation on a synthetic chat with planted ground truth.** The test chats contain jokes, moments and other items planted at known positions, so recall and precision-style numbers are computed rather than asserted. The numbers, their sample sizes and their limits are below; they are not claims about real chats.
+3. **A measured evaluation on a synthetic chat with planted ground truth.** The test chats contain jokes, moments and other items planted at known positions, so recall numbers, and precision once the hand ratings exist, are computed rather than asserted. The numbers, their sample sizes and their limits are below; they are not claims about real chats.
 
 ## Quickstart
 
@@ -72,13 +72,13 @@ PLAYWRIGHT_BROWSERS_PATH=.cache/ms-playwright PYTHONPATH=src .venv/bin/streamlit
 All numbers below are generated from `docs/results/*.json` and memory logs by `scripts/build_readme_tables.py`; a test fails if they are stale. Strict recall counts a planted item as found only when the verified evidence of one AI item sits mostly on that item's planted messages. Planted density is the share of payload messages that are planted lines.
 
 <!-- BEGIN:eval_table -->
-| row | n | input tokens per run | planted density | strict recall (found of in-scope item-runs) | rule-compliant rate | unplanted items per run (awards / moments / jokes) | cost per run (USD) | latency per run (s) |
-|---|---|---|---|---|---|---|---|---|
-| dense 270K tokens, single-pass | 3 | 269,809 | 1.30% | 25 of 30 | 94%, range 92% to 97% | 2.3 / 2.3 / 0.7 | 0.1402, range 0.1392 to 0.1410 | 10.5, range 9.7 to 11.7 |
-| dense 270K tokens, chunked | 3 | 282,704 (sum over calls) | 1.30% | 27 of 30 | 90%, range 88% to 93% | 5.7 / 4.0 / 2.7 | 0.0329, range 0.0323 to 0.0335 | 41.4, range 38.1 to 46.4 (sum of call latencies) |
-| sparse chat, first third, single-pass | 1 | 296,849 | 0.36% | 3 of 3 | 78% | 3.0 / 3.0 / 0.0 | 0.1534 | 13.8 |
-| sparse chat, 889K tokens, single-pass | 1 | 889,497 | 0.39% | 0 of 10 | 52% | 0.0 / 3.0 / 0.0 | 0.4483 | 39.8 |
-| sparse chat, 889K tokens, chunked | 1 | 923,596 (sum over calls) | 0.39% | 5 of 10 | 87% | 6.0 / 6.0 / 5.0 | 0.1029 | 102.1 (sum of call latencies) |
+| row | n | input tokens per run | planted density | strict recall (found of in-scope item-runs) | rule-compliant rate | unplanted items per run (awards / moments / jokes) | cost per run (USD) | wall-clock per run (s) | sum of call latencies per run (s, chunked rows only) |
+|---|---|---|---|---|---|---|---|---|---|
+| dense 270K tokens, single-pass | 3 | 269,809 | 1.30% | 25 of 30 | 94%, range 92% to 97% | 2.3 / 2.3 / 0.7 | 0.1402, range 0.1392 to 0.1410 | 10.5, range 9.7 to 11.7 | n/a |
+| dense 270K tokens, chunked | 3 | 282,704 (sum over calls) | 1.30% | 27 of 30 | 90%, range 88% to 93% | 5.7 / 4.0 / 2.7 | 0.0329, range 0.0323 to 0.0335 | 18.5, range 17.1 to 20.9 | 41.4, range 38.1 to 46.4 |
+| sparse chat, first third, single-pass | 1 | 296,849 | 0.36% | 3 of 3 | 78% | 3.0 / 3.0 / 0.0 | 0.1534 | 13.8 | n/a |
+| sparse chat, 889K tokens, single-pass | 1 | 889,497 | 0.39% | 0 of 10 | 52% | 0.0 / 3.0 / 0.0 | 0.4483 | 39.8 | n/a |
+| sparse chat, 889K tokens, chunked | 1 | 923,596 (sum over calls) | 0.39% | 5 of 10 | 87% | 6.0 / 6.0 / 5.0 | 0.1029 | 42.0 | 102.1 |
 <!-- END:eval_table -->
 
 Rows with n = 1 are single observations. The large-chat rows hold the same planted lines as the dense chat in a longer chat, so planted density differs between rows (see the density column) and the rows are not a controlled comparison (`docs/results/compare_large.md`, `docs/results/diag_large_A.md`).
@@ -86,15 +86,15 @@ Rows with n = 1 are single observations. The large-chat rows hold the same plant
 **Cost, latency and memory.**
 
 <!-- BEGIN:cost_block -->
-Cost is computed from the usage fields times list prices (a request above 100,000 prompt tokens is billed whole at the higher tier) and is not reconciled with the Console. Chunked wall-clock time is shorter than the sum of call latencies because map calls run in parallel.
+Cost is computed from the usage fields times list prices (a request above 100,000 prompt tokens is billed whole at the higher tier) and is not reconciled with the Console. Wall-clock time of a single-pass run is its one call's latency; a chunked run's wall-clock time is shorter than the sum of its call latencies because the map calls run in parallel.
 
-| row | cost per run (USD) | latency per run (s) | wall-clock per run (s, chunked only) |
+| row | cost per run (USD) | wall-clock per run (s) | sum of call latencies per run (s, chunked rows only) |
 |---|---|---|---|
 | dense 270K tokens, single-pass | 0.1402, range 0.1392 to 0.1410 | 10.5, range 9.7 to 11.7 | n/a |
-| dense 270K tokens, chunked | 0.0329, range 0.0323 to 0.0335 | 41.4, range 38.1 to 46.4 | 18.5, range 17.1 to 20.9 |
+| dense 270K tokens, chunked | 0.0329, range 0.0323 to 0.0335 | 18.5, range 17.1 to 20.9 | 41.4, range 38.1 to 46.4 |
 | sparse chat, first third, single-pass | 0.1534 | 13.8 | n/a |
 | sparse chat, 889K tokens, single-pass | 0.4483 | 39.8 | n/a |
-| sparse chat, 889K tokens, chunked | 0.1029 | 102.1 | 42.0 |
+| sparse chat, 889K tokens, chunked | 0.1029 | 42.0 | 102.1 |
 
 Memory and time of the card render paths (Memory and wall-clock measurements. Every value was copied from the session output of the command named in its provenance; none was re-measured when this file was written. macOS, M2, 8 GB. Summed RSS probably overcounts pages shared between processes (unverified). Not a benchmark.)
 
@@ -109,7 +109,7 @@ Screenshot harness (a development tool, not part of the app's footprint; ceiling
 |---|---|---|---|---|
 | server start | 198 | 198 | 198 | phase 6-fix4, 2026-11-07; copied from session output: yes |
 | browser start | 704 | 704 | 704 | phase 6-fix4, 2026-11-07; copied from session output: yes |
-| stats card (browser + server + render child) | 1,116, 1,135, 1,171 | 1,116 | 1,171 | phase 6-fix; phase 6-fix3; phase 6-fix4, 2026-11-07; copied from session output: yes |
+| stats card (browser + server + render child) | 1,015, 1,114, 1,116, 1,121, 1,135, 1,167, 1,171 | 1,015 | 1,171 | phase 6-fix; phase 6-fix2; phase 6-fix3; phase 6-fix4, 2026-11-07; copied from session output: yes |
 | payload preview (browser + server) | 814 | 814 | 814 | phase 6-fix4, 2026-11-07; copied from session output: yes |
 | review (browser + server) | 959 | 959 | 959 | phase 6-fix4, 2026-11-07; copied from session output: yes |
 | review with Render card (browser + server + render child) | 1,088 | 1,088 | 1,088 | phase 6-fix4, 2026-11-07; copied from session output: yes |
@@ -144,13 +144,13 @@ The app runs on 127.0.0.1 only (`.streamlit/config.toml`; usage statistics off) 
 ![Step 4: the payload preview before consent, checkbox unticked, Run disabled](docs/img/app_2_payload_preview_before_consent.png)
 *Payload preview before consent: nothing has been sent; the checkbox is unticked and Run is disabled. The spend figure comes from a fictional demo ledger.*
 
-![Step 5: the first review items with approve, reject and rank controls, context collapsed](docs/img/app_3_review.png)
-*Review step, cropped to the first items; the Render card button sits below the list. A saved model output is loaded through the saved-report upload with its run log. The decisions in this image are auto-approved demo decisions (every item set to approved by the screenshot script).*
+![Step 5: the first three review items with decision and rank controls, the verified counts and the auto-approve button, quotes and context collapsed](docs/img/app_3_review.png)
+*Review step, from the top of the page to the controls of the third item (cropped to that element from the page's own layout, not by a fixed pixel crop). Each item shows its title, summary and first quote, then the decision and rank controls; the other quotes and the context are inside expanders. A saved model output is loaded through the saved-report upload with its run log; the files shown as `demo.report.json` and `demo.json` are copies of the saved run's files, renamed for the screenshot. The decisions were set with the app's "Auto-approve all (synthetic demo only)" button, so the page says "approvals made by: auto-synthetic": they are auto-approved demo decisions, not human review.*
 
-![The rendered card after Render card, whole card with the AI zone filled and both footer lines](docs/img/app_4_review_rendered_card.png)
-*The rendered card after "Render card" (an element screenshot of the card image); its stats cover the same window as the saved run.*
+![The card for the synthetic chat with the AI zone filled, all items auto-approved, both footer lines visible](docs/img/app_4_review_rendered_card.png)
+*The card file (1080x1350) for the saved run, rendered by `python -m gcw card ... --auto-approve-synthetic --until 2026-02-08`; the footer says "all auto-approved (synthetic demo)". The app's own render of the same input is byte-identical (the slow test `tests/test_app_render.py`). An earlier screenshot of the app page was replaced because Streamlit shows the card as a 720-pixel JPEG, which is not the card file.*
 
-The review source is a saved config A run on the synthetic chat that I judged to be the same run as the earlier demo card, based on its visible fields (the joke and moment titles and quotes, both award members, and the proposed and verified counts match); the card's source data was not saved, so that is a judgement, not a check of the whole run. The page refuses a run log whose message count differs from the chosen window. The screenshots come from `scripts/app_screenshots.py`, a development tool with its own memory ceiling (see the table above), not part of the app's footprint.
+The review source is a saved config A run on the synthetic chat that I judged to be the same run as the earlier demo card, based on its visible fields (the joke and moment titles and quotes, both award members, and the proposed and verified counts match); the card's source data was not saved, so that is a judgement, not a check of the whole run. The page refuses a run log whose message count differs from the chosen window. Images 1 to 3 come from `scripts/app_screenshots.py`, a development tool with its own memory ceiling (see the table above), not part of the app's footprint; image 4 is the card file rendered by the CLI.
 
 ## Limits
 
@@ -165,6 +165,8 @@ The review source is a saved config A run on the synthetic chat that I judged to
 - The planted long joke jL does not test long-range dependence: it has enough evidence inside single chunks.
 - The per-type caps rank by evidence count and date spread, which disadvantages moments (one-quote items); chunked and single-pass differ partly because of this.
 - Precision is reported only where the table above shows it; until the hand ratings exist, no precision figure is claimed.
+- Awards and unplanted items are not scored until they are hand-rated. The ratings are made by the author, who designed the dataset, so they are not blind.
+- The parser and the card were checked on one real Android export (US 12-hour clock, U+202F before AM/PM, 14 lines, one sender; `docs/results/real_format_check.md`).
 - The prompt-injection defence was probed on one synthetic chat with a few phrasings (`docs/results/injection_probe.md`); the README does not claim it is robust. Verification in code limits what an injected instruction can put on the card, nothing more.
 - Chat timestamps have minute resolution, so response-time medians are coarse (`docs/stats-verification.md`).
 - The sensitive-keyword screen and the laugh detector are English-only; many harmless messages are withheld by the keyword list, and euphemism, other languages and context are not caught.

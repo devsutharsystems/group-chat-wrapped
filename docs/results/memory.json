@@ -67,13 +67,31 @@
       {
         "step": "stats card (browser + server + render child)",
         "observed_mb": [
+          1015,
+          1114,
           1116,
+          1121,
           1135,
+          1167,
           1171
         ],
-        "min_mb": 1116,
+        "min_mb": 1015,
         "max_mb": 1171,
         "provenance": [
+          {
+            "mb": 1015,
+            "run": "the final harness run of Phase 6-fix2; value supplied by the project owner",
+            "phase": "6-fix2",
+            "measured_on": "2026-11-07",
+            "copied_from_session_output": true
+          },
+          {
+            "mb": 1114,
+            "run": "an earlier harness run of Phase 6-fix2; value supplied by the project owner",
+            "phase": "6-fix2",
+            "measured_on": "2026-11-07",
+            "copied_from_session_output": true
+          },
           {
             "mb": 1116,
             "run": "the first harness run, stopped by the 1 GB sampler; value supplied by the project owner, the exact log line was not re-derived",
@@ -82,9 +100,23 @@
             "copied_from_session_output": true
           },
           {
+            "mb": 1121,
+            "run": "an earlier harness run of Phase 6-fix2; value supplied by the project owner",
+            "phase": "6-fix2",
+            "measured_on": "2026-11-07",
+            "copied_from_session_output": true
+          },
+          {
             "mb": 1135,
             "run": "harness run that produced the four-image set",
             "phase": "6-fix3",
+            "measured_on": "2026-11-07",
+            "copied_from_session_output": true
+          },
+          {
+            "mb": 1167,
+            "run": "an earlier harness run of Phase 6-fix2; value supplied by the project owner",
+            "phase": "6-fix2",
             "measured_on": "2026-11-07",
             "copied_from_session_output": true
           },

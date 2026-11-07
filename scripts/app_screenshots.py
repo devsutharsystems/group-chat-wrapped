@@ -1,4 +1,4 @@
-"""Four headless screenshots of the app on the bundled SYNTHETIC demo chat -> docs/img/. No API call.
+"""Four headless images of the app on the bundled SYNTHETIC demo chat -> docs/img/. No API call.
 
 One Streamlit server (127.0.0.1, nice -n 10) for the whole run; three SEQUENTIAL browser sessions (Chromium --disable-gpu, one page, deviceScaleFactor 1), each
 closed before the next starts. The only moment a second Chromium exists is the app's own card render child, started when the stats card is rendered in
@@ -208,28 +208,30 @@ def main(argv: list[str] | None = None) -> int:
                 side.get_by_text("5 Review").click()
                 page.get_by_text("Nothing to review yet").wait_for()  # let the step settle before the upload, or the widget is re-created and drops the file
                 page.locator('input[type="file"]').first.set_input_files(str(report))
-                page.get_by_text("Context around evidence 1").first.wait_for()
+                page.get_by_text("Context around the first quote").first.wait_for()
                 page.locator('input[type="file"]').nth(1).set_input_files(str(runlog))  # the run log gives the original "proposed" count
                 page.get_by_text("demo.json").first.wait_for()
                 page.get_by_text("Review state").wait_for()
-                for lab in page.get_by_text("approved", exact=True).all():
-                    lab.click()
+                # the approvals are made with the app's own button (shown only for the bundled synthetic chat); nothing is written to a review file by hand
+                page.get_by_role("button", name="Auto-approve all (synthetic demo only)").click()
+                page.get_by_text("approvals made by: auto-synthetic").wait_for()
                 page.get_by_text("'approved': 12").wait_for()  # every decision is registered and the rerun is over
                 time.sleep(1.5)
-                # a viewport as tall as the whole review page: the first items, every control and the Render card button are visible without scrolling
-                h = int(page.evaluate("document.querySelector('[data-testid=\"stMain\"]').scrollHeight"))
-                page.set_viewport_size({"width": 1280, "height": min(h + 40, 7000)})
-                time.sleep(1.5)
-                page.evaluate("document.querySelector('[data-testid=\"stMain\"]').scrollTo(0, 0)")
-                box = page.get_by_role("button", name="Render card").bounding_box()
-                assert box and box["y"] >= 0 and box["y"] + box["height"] <= page.viewport_size["height"], (box, page.viewport_size)
+                # an element-sized capture: from the top of the page to the bottom of the controls (decision and rank) of the THIRD item, measured from the DOM
+                main = page.locator('[data-testid="stMain"]')
+                main.evaluate("e => e.scrollTo(0, 0)")
                 time.sleep(0.5)
-                page.screenshot(path=str(out / "app_3_review.png"))
+                third = [main.locator('[data-testid="stRadio"]').nth(2).bounding_box(), main.locator('[data-testid="stNumberInput"]').nth(2).bounding_box()]
+                assert all(third), third
+                bottom = max(b["y"] + b["height"] for b in third) + 24
+                vh = page.viewport_size["height"]
+                assert 0 < bottom <= vh, (bottom, vh)  # item 3's controls lie inside the capture, and the capture inside the viewport
+                clip = {"x": 0, "y": 0, "width": page.viewport_size["width"], "height": bottom}
+                p3 = out / "app_3_review.png"
+                page.screenshot(path=str(p3), clip=clip)
                 from PIL import Image
 
-                p3 = out / "app_3_review.png"  # the full-height capture is cropped to the first items; the Render card button sits below the list
-                Image.open(p3).crop((0, 0, 1280, 1100)).save(p3, optimize=True)
-                page.set_viewport_size({"width": 1280, "height": 1700})
+                assert Image.open(p3).size[1] >= max(b["y"] + b["height"] for b in third), "the capture does not cover item 3's controls"
                 # 4. render the card from the approved items: the app starts its own render child here (a second Chromium stack)
                 samp.step = "4 review render card (browser + server + render child)"
                 page.get_by_role("button", name="Render card").click()
@@ -239,15 +241,17 @@ def main(argv: list[str] | None = None) -> int:
                 img.scroll_into_view_if_needed()
                 time.sleep(1.5)
                 box = img.bounding_box()
-                assert box["width"] >= 700 and abs(box["height"] - box["width"] * 1350 / 1080) <= 2, box  # the whole card is on screen, both footer lines included
+                assert box["width"] >= 700 and abs(box["height"] - box["width"] * 1350 / 1080) <= 2, box  # the whole card is on screen
+                # the card file the user would get: the download button's file is the real 1080x1350 PNG (st.image shows a 720-px JPEG re-encode, which is not the card file)
                 path4 = out / "app_4_review_rendered_card.png"
-                img.screenshot(path=str(path4))  # an element screenshot of the card image
+                with page.expect_download() as dl:
+                    page.get_by_role("button", name="Download card with AI items (PNG)").click()
+                dl.value.save_as(str(path4))
                 from PIL import Image
 
-                w4, h4 = Image.open(path4).size
-                assert h4 >= box["height"] - 1 and w4 >= box["width"] - 1, ((w4, h4), box)  # the capture covers the card's full bounding box
+                assert Image.open(path4).size == (1080, 1350) and Image.open(path4).format == "PNG"
 
-            for n, (fn, height) in enumerate(((shot1, 1400), (shot2, 1500), (shot3, 1700)), 1):
+            for n, (fn, height) in enumerate(((shot1, 1400), (shot2, 1500), (shot3, 2400)), 1):
                 samp.step = f"{n} browser start"
                 session(pw, fn, height)
                 samp.step = f"{n} browser closed"

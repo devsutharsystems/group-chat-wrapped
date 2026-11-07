@@ -52,8 +52,8 @@ def _densities(root: Path) -> dict[str, float]:
 
 def eval_table(root: Path) -> str:
     dens = _densities(root)
-    L = ["| row | n | input tokens per run | planted density | strict recall (found of in-scope item-runs) | rule-compliant rate | unplanted items per run (awards / moments / jokes) | cost per run (USD) | latency per run (s) |",
-         "|---|---|---|---|---|---|---|---|---|"]
+    L = ["| row | n | input tokens per run | planted density | strict recall (found of in-scope item-runs) | rule-compliant rate | unplanted items per run (awards / moments / jokes) | cost per run (USD) | wall-clock per run (s) | sum of call latencies per run (s, chunked rows only) |",
+         "|---|---|---|---|---|---|---|---|---|---|"]
     for label, name, chat, chunked in ROWS:
         r = _load(root, name)
         s, n = r["summary"], r["n_runs"]
@@ -62,19 +62,21 @@ def eval_table(root: Path) -> str:
         found = sum(v["strict_found_item_runs"] for v in r["recall_by_type"].values())
         poss = sum(v["possible_item_runs"] for v in r["recall_by_type"].values())
         unp = " / ".join(f"{s['unplanted_items'][t]['mean']:.1f}" for t in ("awards", "moments", "running_jokes"))
-        lat = f"{_rng(s['latency_s'])} (sum of call latencies)" if chunked else _rng(s["latency_s"])
-        L.append(f"| {label} | {n} | {toks:,.0f}{' (sum over calls)' if chunked else ''} | {100 * d:.2f}% | {found} of {poss} | {_rng(s['rule_compliant_rate'], pct=True)} | {unp} | {_rng(s['cost_usd'], nd=4)} | {lat} |")
+        wall = _rng(s["wall_clock_s"]) if chunked else _rng(s["latency_s"])  # single-pass: the one call's latency is the wall-clock time
+        calls = _rng(s["latency_s"]) if chunked else "n/a"
+        L.append(f"| {label} | {n} | {toks:,.0f}{' (sum over calls)' if chunked else ''} | {100 * d:.2f}% | {found} of {poss} | {_rng(s['rule_compliant_rate'], pct=True)} | {unp} | {_rng(s['cost_usd'], nd=4)} | {wall} | {calls} |")
     return "\n".join(L)
 
 
 def cost_block(root: Path) -> str:
     L = ["Cost is computed from the usage fields times list prices (a request above 100,000 prompt tokens is billed whole at the higher tier) and is not reconciled with the Console. "
-         "Chunked wall-clock time is shorter than the sum of call latencies because map calls run in parallel.", "",
-         "| row | cost per run (USD) | latency per run (s) | wall-clock per run (s, chunked only) |", "|---|---|---|---|"]
+         "Wall-clock time of a single-pass run is its one call's latency; a chunked run's wall-clock time is shorter than the sum of its call latencies because the map calls run in parallel.", "",
+         "| row | cost per run (USD) | wall-clock per run (s) | sum of call latencies per run (s, chunked rows only) |", "|---|---|---|---|"]
     for label, name, _, chunked in ROWS:
         s = _load(root, name)["summary"]
-        wall = _rng(s["wall_clock_s"]) if chunked and "wall_clock_s" in s else "n/a"
-        L.append(f"| {label} | {_rng(s['cost_usd'], nd=4)} | {_rng(s['latency_s'])} | {wall} |")
+        wall = _rng(s["wall_clock_s"]) if chunked else _rng(s["latency_s"])
+        calls = _rng(s["latency_s"]) if chunked else "n/a"
+        L.append(f"| {label} | {_rng(s['cost_usd'], nd=4)} | {wall} | {calls} |")
     m = json.loads((root / "docs" / "results" / "memory.json").read_text(encoding="utf-8"))
     L += ["", f"Memory and time of the card render paths ({m['note']})", "", "| render path | wall-clock (s) | largest process (MB) | summed over the process tree (MB) | provenance |", "|---|---|---|---|---|"]
     for p in m["render_paths"]:

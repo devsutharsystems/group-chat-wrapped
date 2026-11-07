@@ -44,6 +44,8 @@ Resolved in 3a-fix2 (below). Earlier known screen hit: the keyword `party` (poli
 
 The remaining 'dead', 'vote', 'owe' etc. false positives are unchanged by decision.
 
+**Name-replacement count (38, then 39).** The count of name replacements on the frozen chat is 38 with the keyword lists of Phase 3a and 3a-fix and 39 with the list of 3a-fix2 (reproduced in Phase 7d by running the same code with each commit's keyword file). The counting code did not change. Withheld messages are not scrubbed, so they contribute no replacements; replacing `party` by `political party` in 3a-fix2 released 25 messages (58 withheld became 33), and one of them contains a member name. The count is the same with no aliases file, with `aliases.example.json` and with an aliases table prefilled from the senders.
+
 ## What AI mode sends (Phase 3b)
 
 `python -m gcw analyze` sends the payload text (the `<id> | <time> | Member N | text` lines, with `<` replaced by the fullwidth `＜`) plus a fixed system prompt that contains no names. The exact token count uses the free `count_tokens` endpoint, which also receives the payload, so `--count` and `--confirm` both send it; running `analyze` with no flag sends nothing. Saved run files (`out/runs/`, gitignored) hold the model's response, which quotes pseudonymised payload text; they contain Member tokens only, no real names, and never the API key (only its length).

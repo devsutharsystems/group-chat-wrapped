@@ -15,6 +15,7 @@ from typing import Any
 STATUSES = ("pending", "approved", "rejected")
 TYPES = ("running_jokes", "moments", "awards")
 VERSION = 1
+APPROVAL_MODES = ("human", "auto-synthetic")  # "auto-synthetic" is written only by the CLI flag --auto-approve-synthetic and the app's synthetic-demo button
 
 
 class ReviewError(ValueError):
@@ -37,7 +38,23 @@ def new_review(report: dict, run: str = "") -> dict:
     for typ in TYPES:
         for it in report.get(typ) or []:
             items[item_id(typ, it)] = {"type": typ, "title": _head(it), "status": "pending"}
-    return {"version": VERSION, "run": run, "items": items}
+    return {"version": VERSION, "run": run, "approval_mode": "human", "items": items}
+
+
+def mode_of(review: dict | None) -> str:
+    """How the approvals were made: "human" (a person decided each item; also the default of older files) or "auto-synthetic" (everything approved by a script)."""
+    return (review or {}).get("approval_mode", "human")
+
+
+def check_mode(review: dict | None, frozen_chat: bool) -> None:
+    """A review marked auto-synthetic is refused for any chat that is not the frozen synthetic chat."""
+    if mode_of(review) == "auto-synthetic" and not frozen_chat:
+        raise ReviewError("this review is marked auto-synthetic (everything approved by a script); that is allowed only for the frozen synthetic chat")
+
+
+def set_human(review: dict) -> None:
+    """Any manual decision after an auto-approval makes the approvals human again."""
+    review["approval_mode"] = "human"
 
 
 def set_status(review: dict, ids: list[str], status: str) -> list[str]:
@@ -100,6 +117,7 @@ def approve_all(report: dict, run: str = "") -> dict:
     rv = new_review(report, run)
     for v in rv["items"].values():
         v["status"] = "approved"
+    rv["approval_mode"] = "auto-synthetic"
     return rv
 
 
@@ -111,6 +129,8 @@ def load_review(path: str | Path) -> dict:
     items = data.get("items") if isinstance(data, dict) else None
     if not isinstance(items, dict) or any(not isinstance(v, dict) or v.get("status") not in STATUSES or ("rank" in v and (not isinstance(v["rank"], int) or isinstance(v["rank"], bool))) for v in items.values()):
         raise ReviewError(f"review file {path} is malformed (items must map ids to a status in {STATUSES}; an optional rank must be an integer)")
+    if data.get("approval_mode", "human") not in APPROVAL_MODES:
+        raise ReviewError(f"review file {path} is malformed (approval_mode must be one of {APPROVAL_MODES})")
     return data
 
 

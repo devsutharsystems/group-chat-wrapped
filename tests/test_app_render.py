@@ -47,7 +47,7 @@ def test_the_real_app_ai_card_render_matches_the_cli_card_for_the_saved_config_a
     prep = analyze.prepare(df, al, slice_start=None, slice_end=until)
     report, stats = appcore.load_report_upload(run.with_suffix(".report.json").read_bytes(), prep["index"], set(prep["members"]))
     rv = review.approve_all(report, "app")
-    ai = appcore.zone_for(report, rv, prep["index"], prep["mapping"], al, stats, synthetic=True, proposed=appcore.proposed_from_log(run.with_suffix(".json").read_bytes()))  # synthetic: the CLI flag sets the same footer wording
+    ai = appcore.zone_for(report, rv, prep["index"], prep["mapping"], al, stats, proposed=appcore.proposed_from_log(run.with_suffix(".json").read_bytes()))  # synthetic: the CLI flag sets the same footer wording
     png = appcore.render_png_bytes(appcore.card_html(df, al, None, until, view["date_order"] if view["ambiguous"] else None, ai=ai))
     assert struct.unpack(">II", png[16:24]) == (1080, 1350)
     out = tmp_path / "cli_ai.png"
