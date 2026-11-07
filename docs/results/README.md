@@ -5,6 +5,8 @@ Measured results live here, as files that contain **counts, rates and ids only**
 | file | produced by | what it holds |
 |---|---|---|
 | `eval_full_A.json`, `eval_full_A.md` | `python -m gcw evaluate CHAT --aliases aliases.example.json --truth synthetic/frozen/ground_truth.json --phase 4a --out docs/results/eval_full_A` | three full-chat runs of config A (prompt v1): usage, cost, verification rates and drop reasons, items kept, strict / lenient recall per planted id, by third of the chat and dev versus held-out, unplanted counts, title and summary length distributions |
+| `miss_diagnostic_A.json`, `miss_diagnostic_A.md` | `python scripts/diagnose_misses.py CHAT --aliases aliases.example.json --truth synthetic/frozen/ground_truth.json --phase 4a` | for every strict miss of a planted item: whether an id repair would have found it, whether the run proposed anything on the planted dates, and how far the cited ids of dropped evidence were from the true ids (numbers only) |
+| `precision_A.json`, `precision_A.md` | `python -m gcw rating-score --ratings out/rating/ratings.csv --key out/rating/key.json --out docs/results/precision_A` | precision from the hand ratings (counts and Wilson 95% intervals; written only after every item is rated; the three runs are not independent samples) |
 | `injection_probe.md` | recorded by hand from the run logs of 2026-11-06 | the prompt-injection probe: number of attempts and how many were obeyed |
 
 ## Rules

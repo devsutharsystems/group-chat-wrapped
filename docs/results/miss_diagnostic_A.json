@@ -1,0 +1,115 @@
+{
+ "dropped_other_message": {
+  "beyond_10": 7,
+  "distances": [
+   1,
+   14,
+   225,
+   225,
+   319,
+   832,
+   1000,
+   1000
+  ],
+  "n": 8,
+  "within_10": 1
+ },
+ "misses": [
+  {
+   "a_verbatim_planted_quote": {
+    "any": false,
+    "dropped": 0,
+    "evidence_items": 0,
+    "kept": 0
+   },
+   "b_evidence_on_planted_dates": {
+    "any": false,
+    "evidence_dropped": 0,
+    "evidence_kept": 0,
+    "items": 0,
+    "types": []
+   },
+   "planted": "m3",
+   "run": "20261107T110344-A",
+   "type": "moments"
+  },
+  {
+   "a_verbatim_planted_quote": {
+    "any": false,
+    "dropped": 0,
+    "evidence_items": 0,
+    "kept": 0
+   },
+   "b_evidence_on_planted_dates": {
+    "any": true,
+    "evidence_dropped": 0,
+    "evidence_kept": 2,
+    "items": 1,
+    "types": [
+     "awards"
+    ]
+   },
+   "planted": "m3",
+   "run": "20261107T110407-A",
+   "type": "moments"
+  },
+  {
+   "a_verbatim_planted_quote": {
+    "any": false,
+    "dropped": 0,
+    "evidence_items": 0,
+    "kept": 0
+   },
+   "b_evidence_on_planted_dates": {
+    "any": true,
+    "evidence_dropped": 0,
+    "evidence_kept": 4,
+    "items": 4,
+    "types": [
+     "awards",
+     "running_jokes"
+    ]
+   },
+   "planted": "jL",
+   "run": "20261107T110421-A",
+   "type": "running_jokes"
+  },
+  {
+   "a_verbatim_planted_quote": {
+    "any": false,
+    "dropped": 0,
+    "evidence_items": 0,
+    "kept": 0
+   },
+   "b_evidence_on_planted_dates": {
+    "any": false,
+    "evidence_dropped": 0,
+    "evidence_kept": 0,
+    "items": 0,
+    "types": []
+   },
+   "planted": "m2",
+   "run": "20261107T110421-A",
+   "type": "moments"
+  },
+  {
+   "a_verbatim_planted_quote": {
+    "any": false,
+    "dropped": 0,
+    "evidence_items": 0,
+    "kept": 0
+   },
+   "b_evidence_on_planted_dates": {
+    "any": false,
+    "evidence_dropped": 0,
+    "evidence_kept": 0,
+    "items": 0,
+    "types": []
+   },
+   "planted": "m3",
+   "run": "20261107T110421-A",
+   "type": "moments"
+  }
+ ],
+ "schema": 1
+}

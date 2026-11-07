@@ -90,6 +90,15 @@ Date filter: messages in the last 365 days before the chat's latest message (con
   - held-out (no occurrence inside the dev slice): j3, j4, j5, j6 (7 occurrences each), m2, m3, and the 8 out-of-slice occurrences of jL (the jL item itself counts as dev, only its out-of-slice evidence is unseen);
   - the canary slice holds no planted item except the injection line.
   The split is derived from `ground_truth.json` by `evaluate.dev_held_out` (tested), not typed by hand.
+- **Rating rubric (fixed before any rating, Phase 4a-fix; shown at the top of the rating view):**
+  - JOKE true = the evidence shows a recurring bit or phrase said with joking intent on at least 2 dates.
+  - MOMENT true = the cited messages show one notable event that the title describes.
+  - AWARD true = the evidence supports the award for that member.
+  - PARTLY = the evidence supports only part of the title or summary, or the joking intent is weak.
+  - FALSE = the evidence does not support the claim.
+  - TIC = a verbal tic or stock phrase, not a joke (jokes only).
+  - Rate from the evidence shown, not from guesses about the chat.
+  - Precision is reported from the ratings as TRUE strict (true only) and lenient (true plus partly), with PARTLY, FALSE and TIC counts, per type, per run and overall, with Wilson 95% intervals (`python -m gcw rating-score`). The three runs are not independent samples. A ratings file with any blank rating is refused.
 
 All evaluation uses synthetic chats only. A real chat is never used for evaluation.
 

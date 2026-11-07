@@ -74,6 +74,10 @@ def build_parser() -> argparse.ArgumentParser:
             ev.add_argument("--out", default="out/rating")
             ev.add_argument("--seed", type=int, default=4242)
             ev.add_argument("--size", type=int, default=40)
+    rs = sub.add_parser("rating-score", help="FREE: precision from a completed ratings.csv and key.json (counts only; refuses blank ratings)")
+    rs.add_argument("--ratings", required=True, help="the completed ratings.csv (from the rating view)")
+    rs.add_argument("--key", required=True, help="out/rating/key.json")
+    rs.add_argument("--out", default="docs/results/precision_A", help="output base path (.json and .md; counts only)")
     rv = sub.add_parser("review", help="list, approve or reject the items of a saved run (the card renders approved items only)")
     rv.add_argument("report", help="run log JSON (its sibling .report.json holds the verified report)")
     rv.add_argument("--file", help="review file (default out/reviews/<run>.json)")
@@ -143,6 +147,23 @@ def rating_pack_cmd(args: argparse.Namespace) -> int:
     paths = evaluate.write_rating_pack(pack, args.out)
     print(f"gcw: rating pack of {len(pack['items'])} items (pool {pack['key']['pool']}, drawn {pack['key']['drawn']}, seed {args.seed}); wrote {', '.join(str(p) for p in paths.values())}")
     print("gcw: key.json holds run origin and planted matches: do not open it before rating")
+    return 0
+
+
+def rating_score_cmd(args: argparse.Namespace) -> int:
+    import json
+
+    from gcw import evaluate
+
+    try:
+        rows = evaluate.read_ratings_csv(args.ratings)
+        key = json.loads(Path(args.key).read_text(encoding="utf-8"))
+        res = evaluate.score_ratings(rows, key)
+    except (OSError, ValueError, KeyError) as e:  # RatingError is a ValueError
+        print(f"gcw: {e}", file=sys.stderr)
+        return 3
+    j, m = evaluate.write_precision(res, args.out)
+    print(f"gcw: scored {res['n_items']} ratings; wrote {j} and {m} (counts only). {res['note']}")
     return 0
 
 
@@ -415,6 +436,8 @@ def main(argv: list[str] | None = None) -> int:
         return evaluate_cmd(args)
     if args.cmd == "rating-pack":
         return rating_pack_cmd(args)
+    if args.cmd == "rating-score":
+        return rating_score_cmd(args)
     if args.cmd == "review":
         return review_cmd(args)
     chat = Path(args.chat)

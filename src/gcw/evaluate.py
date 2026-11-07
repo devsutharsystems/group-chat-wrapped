@@ -438,26 +438,10 @@ def build_rating_pack(df: pd.DataFrame, aliases: privacy.Aliases | None, runs: l
 
 
 def render_rating_view(items: list[dict], seed: int) -> str:
-    """Self-contained HTML (no network, no script, CSP default-src none); every dynamic string is escaped. The key is never shown here."""
-    e = _html.escape
+    """The working rating tool (see gcw.rating_ui): self-contained, no network, CSP, every dynamic string escaped. The key is never in it."""
+    from gcw import rating_ui
 
-    def ln(x: dict, cls: str) -> str:
-        return f'<div class="{cls}"><span class="m">{e(x["when"])} {e(x["who"])}</span> {e(x["text"])}</div>'
-
-    parts = ["<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'\">"
-             "<title>Blind rating view</title><style>body{font:16px/1.4 -apple-system,Helvetica,Arial,sans-serif;max-width:900px;margin:24px auto;padding:0 16px;color:#1d1b17}"
-             "section{border:1px solid #d9cfbd;border-radius:10px;padding:12px 16px;margin:18px 0}h2{margin:0 0 4px}.t{color:#6b6254;font-size:13px}.ev{margin:10px 0;padding-left:10px;border-left:4px solid #e6dccb}"
-             ".c{color:#6b6254;font-size:14px}.q{background:#fff3e6;padding:2px 4px}.m{font-weight:600}</style></head><body>"
-             f"<h1>Blind rating view</h1><p>Rate each item in ratings.csv: <b>true</b> (supported by its evidence), <b>partly</b>, <b>false</b>, or <b>tic</b> (a model verbal habit, not a joke or event). "
-             f"{len(items)} items, seed {int(seed)}. Order is shuffled; type and run origin are not shown.</p>"]
-    for it in items:
-        parts.append(f'<section id="{e(it["id"])}"><h2>{e(it["id"])}: {e(it["title"])}</h2><div class="t">{e(it["type"].replace("_", " "))}'
-                     + (f' for {e(it["member"])}' if it.get("member") else "") + f'</div><p>{e(it["summary"])}</p>')
-        for ev in it["evidence"]:
-            parts.append('<div class="ev">' + "".join(ln(x, "c") for x in ev["before"]) + ln(ev["cited"], "cited") + f'<div>quote: <span class="q">{e(ev["quote"])}</span></div>'
-                         + "".join(ln(x, "c") for x in ev["after"]) + "</div>")
-        parts.append("</section>")
-    return "".join(parts) + "</body></html>\n"
+    return rating_ui.render(items, seed)
 
 
 def write_rating_pack(pack: dict, out_dir: str | Path) -> dict[str, Path]:
@@ -473,3 +457,163 @@ def write_rating_pack(pack: dict, out_dir: str | Path) -> dict[str, Path]:
     paths["view"].write_text(render_rating_view(pack["items"], pack["key"]["seed"]), encoding="utf-8")
     paths["key"].write_text(json.dumps(pack["key"], indent=1, sort_keys=True), encoding="utf-8")
     return paths
+
+
+# ------------------------------------------------------------------ Phase 4a-fix: precision from hand ratings, and the miss diagnostic
+import math
+
+RATING_VALUES = ("true", "partly", "false", "tic")
+NOT_INDEPENDENT = ("The three runs are not independent samples: they read the same chat with the same prompt, so the same items and the same mistakes recur "
+                   "across runs and the intervals below understate the real uncertainty.")
+
+
+class RatingError(ValueError):
+    """A ratings file that cannot be scored (blank, invalid, or not matching the key)."""
+
+
+def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float] | None:
+    """Wilson score interval for k successes in n trials (95% for z = 1.96). None when n = 0."""
+    if n <= 0:
+        return None
+    p = k / n
+    denom = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / denom
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
+    return max(0.0, centre - half), min(1.0, centre + half)
+
+
+def _prop(k: int, n: int) -> dict:
+    iv = wilson(k, n)
+    return {"k": k, "n": n, "p": (k / n) if n else None, "lo": iv[0] if iv else None, "hi": iv[1] if iv else None}
+
+
+def _tally(items: list[str]) -> dict:
+    c = {r: items.count(r) for r in RATING_VALUES}
+    n = len(items)
+    return {"n": n, **c, "strict": _prop(c["true"], n), "lenient": _prop(c["true"] + c["partly"], n)}
+
+
+def score_ratings(rows: list[dict], key: dict) -> dict:
+    """Counts only (no text). rows: dicts with id, type, rating, note. Refuses blank or invalid ratings and any mismatch with the key.
+    strict = true only; lenient = true plus partly (tic and false never count)."""
+    kitems = key["items"]
+    blanks = [r["id"] for r in rows if not (r.get("rating") or "").strip()]
+    if blanks:
+        raise RatingError(f"{len(blanks)} blank rating(s), first ids: {', '.join(blanks[:5])}; rate every item before scoring")
+    ids = [r["id"] for r in rows]
+    if len(set(ids)) != len(ids) or set(ids) != set(kitems):
+        raise RatingError("the ratings file and the key do not hold the same set of ids")
+    rating_of = {}
+    for r in rows:
+        rating = r["rating"].strip().lower()
+        meta = kitems[r["id"]]
+        if rating not in RATING_VALUES:
+            raise RatingError(f"{r['id']}: rating {r['rating']!r} is not one of {', '.join(RATING_VALUES)}")
+        if rating == "tic" and meta["type"] != "running_jokes":
+            raise RatingError(f"{r['id']}: tic is only for jokes")
+        if r.get("type") and r["type"] != meta["type"]:
+            raise RatingError(f"{r['id']}: type {r['type']!r} differs from the key")
+        rating_of[r["id"]] = rating
+    all_ids = list(kitems)
+    by_type = {t: _tally([rating_of[i] for i in all_ids if kitems[i]["type"] == t]) for t in SIZE_TYPES}
+    runs = sorted({kitems[i]["run"] for i in all_ids})
+    matching = [i for i in all_ids if kitems[i]["planted_lenient"]]
+    unplanted = [i for i in all_ids if not kitems[i]["planted_lenient"]]
+    covered_len = sorted({p for i in all_ids for p in kitems[i]["planted_lenient"]})
+    covered_str = sorted({p for i in all_ids for p in kitems[i]["planted_strict"]})
+    return {
+        "schema": 1, "interval": "Wilson 95%", "note": NOT_INDEPENDENT, "n_items": len(all_ids),
+        "overall": _tally([rating_of[i] for i in all_ids]), "by_type": by_type,
+        "by_run": {run: _tally([rating_of[i] for i in all_ids if kitems[i]["run"] == run]) for run in runs},
+        "planted_matching": _tally([rating_of[i] for i in matching]), "unplanted": _tally([rating_of[i] for i in unplanted]),
+        "distinct_planted_covered": {"lenient": len(covered_len), "strict": len(covered_str), "lenient_ids": covered_len, "strict_ids": covered_str},
+    }
+
+
+def _ci(d: dict) -> str:
+    if d["n"] == 0:
+        return "n/a"
+    return f"{d['k']} of {d['n']}; p {d['p']:.3f}; interval lo {d['lo']:.3f}; hi {d['hi']:.3f}"
+
+
+def render_precision_markdown(res: dict) -> str:
+    L = ["# Precision of the verified items from hand ratings (config A, phase 4a)", "", f"**{res['note']}**", "",
+         "Counts and intervals only; no chat text. Strict = rated true. Lenient = true plus partly. Interval: Wilson 95%.", "",
+         "| group | n | true | partly | false | tic | strict | lenient |", "|---|---|---|---|---|---|---|---|"]
+
+    def row(name, t):
+        return f"| {name} | {t['n']} | {t['true']} | {t['partly']} | {t['false']} | {t['tic']} | {_ci(t['strict'])} | {_ci(t['lenient'])} |"
+
+    L.append(row("overall", res["overall"]))
+    L += [row(t, v) for t, v in res["by_type"].items()]
+    L += [row(f"run {r}", v) for r, v in res["by_run"].items()]
+    L += [row("matching a planted item", res["planted_matching"]), row("unplanted", res["unplanted"]), "",
+          f"Distinct planted items covered by the rated items: lenient {res['distinct_planted_covered']['lenient']} ({', '.join(res['distinct_planted_covered']['lenient_ids']) or 'none'}); "
+          f"strict {res['distinct_planted_covered']['strict']} ({', '.join(res['distinct_planted_covered']['strict_ids']) or 'none'}).", ""]
+    return "\n".join(L)
+
+
+def write_precision(res: dict, base: str | Path) -> tuple[Path, Path]:
+    b = Path(base)
+    b.parent.mkdir(parents=True, exist_ok=True)
+    j, m = b.with_suffix(".json"), b.with_suffix(".md")
+    j.write_text(json.dumps(rounded(res), indent=1, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
+    m.write_text(render_precision_markdown(res), encoding="utf-8")
+    return j, m
+
+
+def read_ratings_csv(path: str | Path) -> list[dict]:
+    import csv
+
+    with Path(path).open(newline="", encoding="utf-8-sig") as f:
+        rd = csv.DictReader(f)
+        if not rd.fieldnames or "id" not in rd.fieldnames or "rating" not in rd.fieldnames:
+            raise RatingError("a ratings file needs the columns id and rating")
+        return [{"id": r["id"], "type": r.get("type", ""), "rating": r.get("rating", ""), "note": r.get("note", "")} for r in rd]
+
+
+# ---- why were planted items missed? (numbers only)
+def diagnose_misses(df: pd.DataFrame, aliases: privacy.Aliases | None, runs: list[tuple[str, dict, dict]], truth_items: list[dict]) -> dict:
+    """For every strict miss (planted item, run): (a) did any AI item of the planted item's type carry ANY evidence, kept or dropped, whose quote
+    (12+ characters) is a verbatim part of a planted message of that item (an id repair would then have found it)? (b) did the run propose an item
+    of ANY type with evidence citing a message on one of the planted item's dates? Also the distance between cited and true ids of dropped evidence."""
+    prep = analyze.prepare(df, aliases, slice_start=None, slice_end=None)
+    index = prep["index"]
+    ts = [r["ts"] for r in prep["rows"]]
+    occ = verify.planted_occurrences(truth_items, index, prep["mapping"])
+    texts = {t: [normalise_for_match(index[p]["text"]) for p, _ in rec["occurrences"]] for t, rec in occ.items()}
+    dates = {t: sorted({str(w.date()) for _, w in rec["occurrences"]}) for t, rec in occ.items()}
+    misses, distances = [], []
+    for name, _log, report in runs:
+        verified, _ = verify.verify_report(report, index, valid_members=set(prep["members"]))
+        score = verify.match_planted(verified, index, truth_items, prep["mapping"], slice_start=min(ts), slice_end=max(ts))
+        recs = classify_evidence(report, index)
+        distances += [r["distance"] for r in recs if r["status"] == "other_message"]
+        for typ in ("running_jokes", "moments"):
+            for tid in score[typ]["planted_in_slice"]:
+                if tid in score[typ]["found_strict"]:
+                    continue
+                same_type = [r for r in recs if r["type"] == typ and r["quote"]]
+                verb = [r for r in same_type if len(normalise_for_match(r["quote"])) >= verify.MIN_QUOTE_CHARS and any(normalise_for_match(r["quote"]) in tx for tx in texts[tid])]
+                on_dates = [r for r in recs if r["message_id"] in index and str(index[r["message_id"]]["ts"].date()) in dates[tid]]
+                misses.append({
+                    "run": name, "planted": tid, "type": typ,
+                    "a_verbatim_planted_quote": {"any": bool(verb), "evidence_items": len(verb), "kept": sum(r["status"] == "verified" for r in verb), "dropped": sum(r["status"] != "verified" for r in verb)},
+                    "b_evidence_on_planted_dates": {"any": bool(on_dates), "items": len({(r["type"], r["item"]) for r in on_dates}), "evidence_kept": sum(r["status"] == "verified" for r in on_dates),
+                                                    "evidence_dropped": sum(r["status"] != "verified" for r in on_dates), "types": sorted({r["type"] for r in on_dates})},
+                })
+    return {"schema": 1, "misses": misses, "dropped_other_message": {"n": len(distances), "within_10": sum(d <= 10 for d in distances), "beyond_10": sum(d > 10 for d in distances),
+                                                                         "distances": sorted(distances)}}
+
+
+def render_diagnostic_markdown(d: dict) -> str:
+    L = ["# Why planted items were missed (config A, phase 4a; numbers only)", "",
+         "Strict misses only. (a) Any evidence of an AI item of the same type, kept or dropped, whose quote (12+ characters) is verbatim part of a planted message of that item, so an id repair would have found it. "
+         "(b) Any item of any type with evidence citing a message on one of the planted item's dates.", "",
+         "| run | planted | (a) verbatim planted quote: evidence items (kept; dropped) | (b) evidence on planted dates: items (kept; dropped) |", "|---|---|---|---|"]
+    for m in d["misses"]:
+        a, b = m["a_verbatim_planted_quote"], m["b_evidence_on_planted_dates"]
+        L.append(f"| {m['run']} | {m['planted']} | {'yes' if a['any'] else 'no'}: {a['evidence_items']} ({a['kept']}; {a['dropped']}) | {'yes' if b['any'] else 'no'}: {b['items']} items ({b['evidence_kept']}; {b['evidence_dropped']}) |")
+    o = d["dropped_other_message"]
+    L += ["", f"Dropped evidence whose quote exists in another message: {o['n']}. Cited id within 10 of the true id (the nearest other message holding the quote): {o['within_10']}; further away: {o['beyond_10']}. Distances: {', '.join(str(x) for x in o['distances']) or 'none'}.", ""]
+    return "\n".join(L)

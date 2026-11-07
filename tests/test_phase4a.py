@@ -244,12 +244,12 @@ def test_the_view_never_shows_the_key_and_escapes_chat_text(pack, tmp_path):
     view = paths["view"].read_text()
     for secret in [RUNS[0][0], RUNS[1][0], RUNS[2][0], "planted", "key.json", "phase", "jL", "j1", "j2", "j3", "m1"]:
         assert secret not in view, secret
-    assert "default-src 'none'" in view and "http://" not in view and "https://" not in view and "<script" not in view.lower() and "<img" not in view and "src=" not in view
+    assert "default-src 'none'" in view and "http://" not in view and "https://" not in view and view.lower().count("<script") == 2 and "<img" not in view and "src=" not in view
     # hostile chat text and titles are escaped: put a script tag into a title and a quote of one run
     bad = [(n, lg, {**rep, "moments": [{"title": "<b onclick=x>t</b>", "summary": "a <script>s</script>", "evidence": [ev(12, verify.neutralise("<script>alert(1)</script> hostile chat"))]}]}) for n, lg, rep in RUNS[:1]]
     p2 = evaluate.build_rating_pack(mk_df(), ALIASES, bad, TRUTH, seed=1)
     html = evaluate.render_rating_view(p2["items"], 1)
-    assert "<script" not in html.lower() and "&lt;script&gt;alert(1)&lt;/script&gt; hostile chat" in html and "&lt;b onclick=x&gt;t&lt;/b&gt;" in html and "<b onclick" not in html
+    assert html.lower().count("<script") == 2 and "&lt;script&gt;alert(1)&lt;/script&gt; hostile chat" in html and "&lt;b onclick=x&gt;t&lt;/b&gt;" in html and "<b onclick" not in html
 
 
 def test_context_is_two_messages_each_side_with_names_and_dates(pack):
