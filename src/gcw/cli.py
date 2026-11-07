@@ -40,6 +40,9 @@ def build_parser() -> argparse.ArgumentParser:
     an.add_argument("--budget", type=float, default=0.15, help="phase budget in USD over ledger labels starting 3b: (default 0.15)")
     an.add_argument("--save-response", action="store_true", help="also save the raw model response and the verified report under out/runs/ (OFF by default; they hold pseudonymised quotes, delete them afterwards)")
     an.add_argument("--phase", default="3b", help="ledger label prefix for the phase budget (default 3b)")
+    an.add_argument("--mode", choices=["single", "chunked", "auto"], default="single",
+                    help="single (default): one request; chunked: day-aligned chunks, map-reduce; auto: exact count, single-pass up to 950000 tokens else chunked (needs --count or --confirm)")
+    an.add_argument("--workers", type=int, default=4, help="parallel map calls in chunked mode (at most 4)")
     an.add_argument("--max-input-tokens", type=int, default=95_000, help="refuse a request with more input tokens than this (default 95000)")
     an.add_argument("--max-run-cost", type=float, help="refuse if the worst-case cost estimate of one run is above this many USD")
     an.add_argument("--require-frozen-dataset", action="store_true", help="verify_dataset() and the chat must be the frozen synthetic chat, checked first")
@@ -68,12 +71,18 @@ def build_parser() -> argparse.ArgumentParser:
         ev.add_argument("--phase", required=True, help="phase label of the runs to read (for example 4a)")
         ev.add_argument("--config", default="A")
         ev.add_argument("--runs-dir", default="out/runs")
+        ev.add_argument("--mode", choices=["single", "chunked"], default="single", help="which runs to read (default single)")
         if name == "evaluate":
             ev.add_argument("--out", default="docs/results/eval_full_A", help="output base path (.json and .md are written; counts and ids only)")
         else:
             ev.add_argument("--out", default="out/rating")
             ev.add_argument("--seed", type=int, default=4242)
             ev.add_argument("--size", type=int, default=40)
+    cm = sub.add_parser("compare-modes", help="FREE: compare two results files (single-pass and chunked) and state which written predictions held")
+    cm.add_argument("--single", default="docs/results/eval_full_A.json")
+    cm.add_argument("--chunked", default="docs/results/eval_full_chunked.json")
+    cm.add_argument("--predictions-commit", default="", help="hash of the commit that holds the predictions")
+    cm.add_argument("--out", default="docs/results/compare_single_vs_chunked.md")
     rs = sub.add_parser("rating-score", help="FREE: precision from a completed ratings.csv and key.json (counts only; refuses blank ratings)")
     rs.add_argument("--ratings", required=True, help="the completed ratings.csv (from the rating view)")
     rs.add_argument("--key", required=True, help="out/rating/key.json")
@@ -104,7 +113,7 @@ def _saved_runs(args: argparse.Namespace):
     except (OSError, ValueError, KeyError) as e:
         print(f"gcw: {e}", file=sys.stderr)
         return 2
-    files = evaluate.pick_runs(args.runs_dir, args.phase, args.config)
+    files = evaluate.pick_runs(args.runs_dir, args.phase, args.config, args.mode)
     if not files:
         print(f"gcw: no saved runs of phase {args.phase}, config {args.config} in {args.runs_dir} (runs need --save-response)", file=sys.stderr)
         return 3
@@ -113,11 +122,58 @@ def _saved_runs(args: argparse.Namespace):
     runs = []
     for f in files:
         log, rep = evaluate.load_run(f)
+        if args.mode == "chunked":  # the response file holds all raw map and reduce responses; the final verified report sits next to it
+            raw = rep
+            rep = json.loads(f.with_suffix(".report.json").read_text(encoding="utf-8"))
         if log.get("messages") != n_chat:
             print(f"gcw: run {f.name} has {log.get('messages')} messages but this chat has {n_chat}", file=sys.stderr)
             return 3
-        runs.append((f.stem, log, rep))
+        runs.append((f.stem, log, rep, raw) if args.mode == "chunked" else (f.stem, log, rep))
     return runs, df, aliases, truth
+
+
+def _print_chunked(res: dict, args: argparse.Namespace) -> None:
+    from gcw import cost
+
+    print(f"chunked plan: {len(res['chunks'])} chunks over {res['messages']} messages ({res['withheld']} withheld)")
+    for k, c in enumerate(res["chunks"], 1):
+        print(f"  chunk {k}: {c['start']} to {c['end']}, {c['messages']} messages, {c['tokens']} exact tokens")
+    print(f"worst-case map cost if every call used all {__import__('gcw.analyze', fromlist=['x']).MAX_TOKENS} output tokens: ${res['worst_case_map_cost_usd']:.4f}")
+    if "final" not in res:
+        print("planning only (--count): nothing was generated.")
+        return
+    t, lg = res["totals"], res["log"]
+    for c in lg["calls"]:
+        a = c["attempts"][-1]
+        print(f"  {c['kind']}{' ' + str(c['chunk']) if 'chunk' in c else ''}: {c.get('tokens')} tokens in, {a['usage'].get('output_tokens')} out, latency {c['latency_s']}s, cost ${c['cost_usd']:.6f}, "
+              f"stop {a['stop_reason']}, attempts {len(c['attempts'])}")
+    print(f"run: {t['calls']} calls, cost ${t['cost_usd']:.6f}, wall-clock {t['wall_clock_s']}s, sum of call latencies {t['latency_sum_s']}s, thinking_tokens {t['thinking_tokens']}")
+    print(f"candidates before merging {lg['candidates_before_merge']}; merge {res['merge']}; after merge {lg['after_merge']}; after item rules {lg['after_rules']}; final {lg['final_items']} (cap cut {lg['cap_cut']}); rule drops {lg['rule_drops']}")
+    st = res["stats"]
+    print(f"evidence verified {st['evidence_verified']}/{st['evidence_total']} across the map calls; items proposed {st['items_in_by_type']}")
+    if "score" in res:
+        for typ, s in res["score"].items():
+            if s["planted_in_slice"]:
+                print(f"planted {typ}: {s['planted_in_slice']}, strict found {s['found_strict']}, lenient found {s['found']}, unplanted items {s['items_unplanted']}")
+    print(f"ledger total: ${cost.ledger_total():.6f}")
+
+
+def compare_modes_cmd(args: argparse.Namespace) -> int:
+    import json
+
+    from gcw import evaluate
+
+    try:
+        single = json.loads(Path(args.single).read_text(encoding="utf-8"))
+        chunked = json.loads(Path(args.chunked).read_text(encoding="utf-8"))
+        md = evaluate.compare_modes(single, chunked, args.predictions_commit)
+    except (OSError, ValueError, KeyError) as e:
+        print(f"gcw: {e}", file=sys.stderr)
+        return 3
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(md, encoding="utf-8")
+    print(f"gcw: wrote {args.out}")
+    return 0
 
 
 def evaluate_cmd(args: argparse.Namespace) -> int:
@@ -130,7 +186,7 @@ def evaluate_cmd(args: argparse.Namespace) -> int:
     if truth is None:
         print("gcw: --truth is required for evaluate", file=sys.stderr)
         return 2
-    res = evaluate.evaluate_runs(df, aliases, runs, truth)
+    res = evaluate.evaluate_runs(df, aliases, runs, truth, mode=args.mode)
     j, m = evaluate.write_results(res, args.out)
     print(f"gcw: evaluated {res['n_runs']} runs; wrote {j} and {m} (counts and ids only)")
     return 0
@@ -139,6 +195,9 @@ def evaluate_cmd(args: argparse.Namespace) -> int:
 def rating_pack_cmd(args: argparse.Namespace) -> int:
     from gcw import evaluate
 
+    if args.mode == "chunked":
+        print("gcw: rating-pack supports single-pass runs only", file=sys.stderr)
+        return 2
     got = _saved_runs(args)
     if isinstance(got, int):
         return got
@@ -313,7 +372,7 @@ def analyze_cmd(args: argparse.Namespace) -> int:
     import random
 
     from gcw import analyze as az
-    from gcw import cost, privacy
+    from gcw import chunked, cost, privacy
     chat = Path(args.chat)
     if not chat.is_file():
         print(f"gcw: chat file not found: {chat}", file=sys.stderr)
@@ -355,6 +414,36 @@ def analyze_cmd(args: argparse.Namespace) -> int:
     if report.n_messages == 0:
         print("gcw: no messages could be parsed from this file", file=sys.stderr)
         return 3
+    mode = args.mode
+    if mode == "auto":
+        if not (args.count or args.confirm):
+            print("gcw: --mode auto needs an exact token count: add --count (free, sends the payload) or --confirm", file=sys.stderr)
+            return 2
+        try:
+            probe = az.run_analysis(df, aliases, config=args.config, slice_start=args.slice_start, slice_end=args.slice_end, count_only=True, budget=args.budget,
+                                    phase=args.phase, max_input_tokens=10**9, label_suffix=args.label)
+        except (az.AnalysisError, cost.CostError, OSError, RuntimeError) as e:
+            print(f"gcw: {e}", file=sys.stderr)
+            return 3
+        mode = chunked.choose_mode(probe["request_tokens"])
+        print(f"auto: exact count {probe['request_tokens']} tokens, single-pass limit {chunked.SINGLE_PASS_LIMIT}: using {mode}")
+        if mode == "chunked":
+            print(chunked.AUTO_WARNING)
+        else:
+            args.max_input_tokens = chunked.SINGLE_PASS_LIMIT
+    if mode == "chunked":
+        print(f"reduce prompt version: {chunked.REDUCE_PROMPT_VERSION}")
+        if not (args.count or args.confirm):
+            print("chunked mode: nothing was sent. Exact chunk planning needs token counts: use --count (free, sends the payload chunks) or --confirm to run.")
+            return 0
+        try:
+            res = chunked.run_chunked(df, aliases, config=args.config, confirm=args.confirm, count_only=args.count, budget=args.budget, phase=args.phase,
+                                      label=args.label, workers=args.workers, save_response=args.save_response, truth_items=truth)
+        except (az.AnalysisError, cost.CostError, OSError, RuntimeError) as e:
+            print(f"gcw: {e}", file=sys.stderr)
+            return 3
+        _print_chunked(res, args)
+        return 0
     try:
         res = az.run_analysis(df, aliases, config=args.config, slice_start=args.slice_start, slice_end=args.slice_end, confirm=args.confirm,
                               count_only=args.count, budget=args.budget, truth_items=truth, label_suffix=args.label,
@@ -438,6 +527,8 @@ def main(argv: list[str] | None = None) -> int:
         return rating_pack_cmd(args)
     if args.cmd == "rating-score":
         return rating_score_cmd(args)
+    if args.cmd == "compare-modes":
+        return compare_modes_cmd(args)
     if args.cmd == "review":
         return review_cmd(args)
     chat = Path(args.chat)

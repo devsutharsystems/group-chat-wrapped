@@ -159,8 +159,21 @@ TYPES = verify.TYPES
 SIZE_TYPES = ("running_jokes", "moments", "awards")
 
 
-def pick_runs(runs_dir: str | Path, phase: str, config: str = "A") -> list[Path]:
-    """Run logs (sorted by file name) of `phase` and `config` with a saved response, no error, and no slice (the whole chat)."""
+def chunked_classification(all_rows: list[dict], log: dict, raw: dict) -> dict:
+    """Evidence statistics of a chunked run: every raw map response classified against its OWN chunk (rows of the logged day range), then summed."""
+    recs: list[dict] = []
+    for k, ch in enumerate(log["chunks"]):
+        sel = [r for r in all_rows if ch["start"] <= r["ts"].date().isoformat() <= ch["end"]]
+        try:
+            rep = json.loads(raw["map"][k])
+        except (ValueError, IndexError, TypeError):
+            continue
+        recs += classify_evidence(rep, verify.make_index(sel))
+    return summarise_classification(recs)
+
+
+def pick_runs(runs_dir: str | Path, phase: str, config: str = "A", mode: str = "single") -> list[Path]:
+    """Run logs (sorted by file name) of `phase` and `config` with a saved response, no error, and no slice (the whole chat). `mode`: single or chunked."""
     out = []
     for f in sorted(Path(runs_dir).glob("*.json")):
         if f.name.endswith(".report.json") or not f.with_suffix(".response.txt").exists():
@@ -170,7 +183,8 @@ def pick_runs(runs_dir: str | Path, phase: str, config: str = "A") -> list[Path]
         except ValueError:
             continue
         sl = log.get("slice") or {}
-        if log.get("phase") == phase and log.get("config") == config and "error" not in log and sl.get("start") is None and sl.get("end") is None:
+        if (log.get("phase") == phase and log.get("config") == config and "error" not in log and sl.get("start") is None and sl.get("end") is None
+                and log.get("mode", "single") == mode):
             out.append(f)
     return out
 
@@ -209,8 +223,10 @@ def planted_groups(truth_items: list[dict], first_day: _date, last_day: _date) -
     return out
 
 
-def evaluate_runs(df: pd.DataFrame, aliases: privacy.Aliases | None, runs: list[tuple[str, dict, dict]], truth_items: list[dict]) -> dict:
-    """runs: [(name, log, raw report)]. Returns the result dict (counts, rates and planted ids only: NO titles, summaries, quotes or message text)."""
+def evaluate_runs(df: pd.DataFrame, aliases: privacy.Aliases | None, runs: list[tuple], truth_items: list[dict], mode: str = "single") -> dict:
+    """runs: [(name, log, raw report)] for single-pass, or [(name, log, final verified report, raw map responses)] for mode='chunked' (the evidence statistics
+    then come from the map calls, each classified against its own chunk). Returns the result dict (counts, rates and planted ids only: NO titles, summaries,
+    quotes or message text)."""
     prep = analyze.prepare(df, aliases, slice_start=None, slice_end=None)
     index = prep["index"]
     ts = [r["ts"] for r in prep["rows"]]
@@ -219,9 +235,16 @@ def evaluate_runs(df: pd.DataFrame, aliases: privacy.Aliases | None, runs: list[
     lens: dict[str, dict[str, list[str]]] = {t: {"title": [], "summary": []} for t in SIZE_TYPES}
     found = {t: {"strict": 0, "lenient": 0, "by_date": 0} for t in groups}
     planted_in = set()
-    for name, log, report in runs:
-        verified, stats = verify.verify_report(report, index, valid_members=set(prep["members"]))
-        summ = summarise_classification(classify_evidence(report, index))
+    for run in runs:
+        name, log, report = run[0], run[1], run[2]
+        if mode == "chunked":
+            verified = report
+            summ = chunked_classification(prep["rows"], log, run[3])
+            stats = {"items_in_by_type": log["stats"]["items_in_by_type"], "items_kept_by_type": {t: len(verified[t]) for t in verify.TYPES},
+                     "evidence_verified": summ["status_counts"].get("verified", 0)}
+        else:
+            verified, stats = verify.verify_report(report, index, valid_members=set(prep["members"]))
+            summ = summarise_classification(classify_evidence(report, index))
         score = verify.match_planted(verified, index, truth_items, prep["mapping"], slice_start=min(ts), slice_end=max(ts))
         for typ in TYPES:
             for t in score[typ]["planted_in_slice"]:
@@ -237,10 +260,14 @@ def evaluate_runs(df: pd.DataFrame, aliases: privacy.Aliases | None, runs: list[
                 lens[typ]["title"].append(str(it.get("title") or it.get("award") or ""))
                 lens[typ]["summary"].append(str(it.get("summary") or ""))
         u = log.get("usage") or {}
+        tot = log.get("totals") or {}
         per_run.append({
             "name": name, "prompt_version": log.get("prompt_version"), "stop_reason": log.get("stop_reason"),
-            "input_tokens": u.get("input_tokens"), "output_tokens": u.get("output_tokens"), "thinking_tokens": (u.get("output_tokens_details") or {}).get("thinking_tokens"),
-            "latency_s": log.get("latency_s"), "cost_usd": log.get("cost_usd"),
+            "input_tokens": u.get("input_tokens", tot.get("input_tokens")), "output_tokens": u.get("output_tokens", tot.get("output_tokens")),
+            "thinking_tokens": (u.get("output_tokens_details") or {}).get("thinking_tokens", tot.get("thinking_tokens")),
+            "latency_s": log.get("latency_s", tot.get("latency_sum_s")), "cost_usd": log.get("cost_usd", tot.get("cost_usd")),
+            **({"calls": tot.get("calls"), "wall_clock_s": tot.get("wall_clock_s"), "latency_sum_s": tot.get("latency_sum_s"), "candidates_before_merge": log["candidates_before_merge"]["total"],
+                "items_after_merge": sum(log["after_merge"].values()), "items_after_rules": sum(log["after_rules"].values()), "chunks": len(log["chunks"])} if mode == "chunked" else {}),
             "items_in": stats["items_in_by_type"], "items_kept": stats["items_kept_by_type"],
             "evidence_total": summ["evidence_total"], "evidence_verified": stats["evidence_verified"],
             "rule_compliant_rate": summ["rule_compliant_rate"], "grounding_rate": summ["grounding_rate"], "status_counts": summ["status_counts"],
@@ -271,7 +298,7 @@ def evaluate_runs(df: pd.DataFrame, aliases: privacy.Aliases | None, runs: list[
     moments = [t for t, v in planted.items() if v["type"] == "moments" and v["in_scope"]]
     by_date_total = sum(planted[t]["found_by_date_runs"] for t in moments)
     return {
-        "schema": 1, "phase": runs[0][1].get("phase") if runs else None, "config": runs[0][1].get("config") if runs else None, "n_runs": n, "messages": len(prep["rows"]),
+        "schema": 1, "mode": mode, "phase": runs[0][1].get("phase") if runs else None, "config": runs[0][1].get("config") if runs else None, "n_runs": n, "messages": len(prep["rows"]),
         "runs": per_run,
         "summary": {
             "rule_compliant_rate": _stat([r["rule_compliant_rate"] for r in per_run]), "grounding_rate": _stat([r["grounding_rate"] for r in per_run]),
@@ -281,6 +308,8 @@ def evaluate_runs(df: pd.DataFrame, aliases: privacy.Aliases | None, runs: list[
             "thinking_tokens": _stat([r["thinking_tokens"] for r in per_run if r["thinking_tokens"] is not None]),
             "latency_s": _stat([r["latency_s"] for r in per_run if r["latency_s"] is not None]),
             "cost_usd": _stat([r["cost_usd"] for r in per_run if r["cost_usd"] is not None]),
+            **({"wall_clock_s": _stat([r["wall_clock_s"] for r in per_run]), "candidates_before_merge": _stat([r["candidates_before_merge"] for r in per_run]),
+                "items_after_merge": _stat([r["items_after_merge"] for r in per_run]), "items_after_rules": _stat([r["items_after_rules"] for r in per_run])} if mode == "chunked" else {}),
         },
         "planted": planted, "recall_by_third": by_third, "recall_by_split": by_split, "recall_by_type": by_type,
         "found_by_date_moments": {"items": moments, "found_item_runs": by_date_total, "possible_item_runs": len(moments) * n,
@@ -306,7 +335,7 @@ def render_markdown(res: dict) -> str:
     """Markdown of the result dict: ranges and n only, no winner language. Numbers are written so the repo scanner's phone rule never matches
     (percent signs and semicolons, never two numbers separated by a space)."""
     n, s = res["n_runs"], res["summary"]
-    L = [f"# Full-chat evaluation, config {res['config']}, phase {res['phase']} (n = {n} runs)", "",
+    L = [f"# Full-chat evaluation, {res.get('mode', 'single')} mode, config {res['config']}, phase {res['phase']} (n = {n} runs)", "",
          f"Messages in the payload: {res['messages']}. Counts, rates and planted ids only; no chat text. Ranges are over n = {n} runs; no ranking of anything.", "",
          "## Per run", "", "| run | input tokens | output tokens | thinking tokens | stop reason | latency s | cost USD | items in (jokes; moments; awards) | items kept | evidence verified of total | rule-compliant | grounding |",
          "|---|---|---|---|---|---|---|---|---|---|---|---|"]
@@ -314,10 +343,16 @@ def render_markdown(res: dict) -> str:
         L.append(f"| {r['name']} | {r['input_tokens']} | {r['output_tokens']} | {r['thinking_tokens']} | {r['stop_reason']} | {_fmt(r['latency_s'])} | {_fmt(r['cost_usd'], 4)} | "
                  f"{'; '.join(str(r['items_in'][t]) for t in SIZE_TYPES)} | {'; '.join(str(r['items_kept'][t]) for t in SIZE_TYPES)} | "
                  f"{r['evidence_verified']} of {r['evidence_total']} | {_pct(r['rule_compliant_rate'])} | {_pct(r['grounding_rate'])} |")
+    if res.get("mode") == "chunked":
+        L += ["", "Chunked runs (calls, wall-clock seconds, sum of call latencies, candidates before merging, items after the merge and after the item rules):", "",
+              "| run | chunks | calls | wall-clock s | sum of call latencies s | candidates | after merge | after rules |", "|---|---|---|---|---|---|---|---|"]
+        for r in res["runs"]:
+            L.append(f"| {r['name']} | {r['chunks']} | {r['calls']} | {_fmt(r['wall_clock_s'])} | {_fmt(r['latency_sum_s'])} | {r['candidates_before_merge']} | {r['items_after_merge']} | {r['items_after_rules']} |")
     L += ["", "## Summary over runs", "",
           f"- rule-compliant rate: {_rng(s['rule_compliant_rate'], True)}", f"- grounding rate: {_rng(s['grounding_rate'], True)}",
           *[f"- items kept, {t}: {_rng(s['items_kept'][t], nd=1)}" for t in SIZE_TYPES], *[f"- unplanted items, {t}: {_rng(s['unplanted_items'][t], nd=1)}" for t in SIZE_TYPES],
           f"- output tokens: {_rng(s['output_tokens'], nd=0)}", f"- thinking tokens: {_rng(s['thinking_tokens'], nd=0)}", f"- latency seconds: {_rng(s['latency_s'])}", f"- cost USD: {_rng(s['cost_usd'], nd=4)}",
+          *([f"- wall-clock seconds: {_rng(s['wall_clock_s'])}", f"- candidates before merging: {_rng(s['candidates_before_merge'])}", f"- items after the merge: {_rng(s['items_after_merge'])}", f"- items after the item rules: {_rng(s['items_after_rules'])}"] if res.get("mode") == "chunked" else []),
           "", "Drop reasons per run (evidence status counts):", ""]
     for r in res["runs"]:
         L.append(f"- {r['name']}: " + "; ".join(f"{k} {v}" for k, v in sorted(r["status_counts"].items())))
@@ -617,3 +652,53 @@ def render_diagnostic_markdown(d: dict) -> str:
     o = d["dropped_other_message"]
     L += ["", f"Dropped evidence whose quote exists in another message: {o['n']}. Cited id within 10 of the true id (the nearest other message holding the quote): {o['within_10']}; further away: {o['beyond_10']}. Distances: {', '.join(str(x) for x in o['distances']) or 'none'}.", ""]
     return "\n".join(L)
+
+
+# ------------------------------------------------------------------ Phase 4b: single-pass versus chunked comparison
+WINNER_WORDS = ("winner", "best", "better", "worse", "outperform", "superior", "recommend", "beats")
+
+
+def _mean_rng(s: dict, pct: bool = False, nd: int = 4) -> str:
+    return _rng(s, pct, nd)
+
+
+def compare_modes(single: dict, chunked: dict, commit: str = "") -> str:
+    """Markdown comparing two results dicts (n runs each, counts and ids only). It states which of the written predictions held, from the numbers,
+    and uses no ranking language."""
+    ns, nc = single["n_runs"], chunked["n_runs"]
+    ps, pc = single["planted"], chunked["planted"]
+    jokes = [t for t, v in ps.items() if v["type"] == "running_jokes"]
+    L = [f"# Single-pass versus chunked map-reduce (n = {ns} runs and n = {nc} runs; frozen synthetic chat; config A, prompt v1)", "",
+         f"Predictions were written to `docs/PRD.md` and committed before any chunked run{(' in commit ' + commit) if commit else ''}. Counts and ids only; no chat text. "
+         "Real chats differ: the synthetic planted items are easier than real jokes.", "",
+         "## Planted items found (strict), in k of n runs", "", "| planted id | type | group | split | single-pass | chunked | single-pass lenient | chunked lenient |", "|---|---|---|---|---|---|---|---|"]
+    for t, v in ps.items():
+        c = pc.get(t, {})
+        L.append(f"| {t} | {v['type']} | {v['group']} | {v['split']} | {v['found_strict_runs']} of {ns} | {c.get('found_strict_runs')} of {nc} | {v['found_lenient_runs']} of {ns} | {c.get('found_lenient_runs')} of {nc} |")
+    ss, sc = single["summary"], chunked["summary"]
+    L += ["", "## Other numbers (mean; min; max over runs)", "", "| measure | single-pass | chunked |", "|---|---|---|",
+          f"| rule-compliant rate | {_mean_rng(ss['rule_compliant_rate'], True)} | {_mean_rng(sc['rule_compliant_rate'], True)} |",
+          f"| grounding rate | {_mean_rng(ss['grounding_rate'], True)} | {_mean_rng(sc['grounding_rate'], True)} |",
+          *[f"| items kept, {t} | {_mean_rng(ss['items_kept'][t], nd=1)} | {_mean_rng(sc['items_kept'][t], nd=1)} |" for t in SIZE_TYPES],
+          *[f"| unplanted items, {t} | {_mean_rng(ss['unplanted_items'][t], nd=1)} | {_mean_rng(sc['unplanted_items'][t], nd=1)} |" for t in SIZE_TYPES],
+          f"| cost USD per run (from usage) | {_mean_rng(ss['cost_usd'])} | {_mean_rng(sc['cost_usd'])} |",
+          f"| latency seconds (single: the one call; chunked: sum of all call latencies) | {_mean_rng(ss['latency_s'], nd=1)} | {_mean_rng(sc['latency_s'], nd=1)} |",
+          f"| wall-clock seconds (chunked, map calls in parallel) | not measured | {_mean_rng(sc['wall_clock_s'], nd=1) if 'wall_clock_s' in sc else 'n/a'} |",
+          f"| output tokens | {_mean_rng(ss['output_tokens'], nd=0)} | {_mean_rng(sc['output_tokens'], nd=0)} |", ""]
+    # predictions
+    cost_s, cost_c = ss["cost_usd"]["mean"], sc["cost_usd"]["mean"]
+    p1 = cost_c < 0.4 * cost_s
+    jl_s, jl_c = ps["jL"]["found_strict_runs"], pc["jL"]["found_strict_runs"]
+    p2 = jl_c < jl_s
+    diffs = {t: abs(pc[t]["found_strict_runs"] - ps[t]["found_strict_runs"]) for t in jokes if t != "jL"}
+    p3 = all(d <= 1 for d in diffs.values())
+    mom = [t for t, v in ps.items() if v["type"] == "moments"]
+    L += ["## Predictions", "",
+          f"1. Chunked cost per run below 40% of single-pass: chunked mean {cost_c:.4f} against a limit of {0.4 * cost_s:.4f} (40% of the single-pass mean {cost_s:.4f}): **{'held' if p1 else 'did not hold'}**.",
+          f"2. jL found (strict) in fewer chunked runs than in single-pass: chunked {jl_c} of {nc}, single-pass {jl_s} of {ns}: **{'held' if p2 else 'did not hold'}**.",
+          f"3. Each of the six other jokes within one item-run of single-pass: differences {', '.join(f'{t} {d}' for t, d in sorted(diffs.items()))}: **{'held' if p3 else 'did not hold'}**.",
+          f"4. Moments: no prediction. Strict found item-runs, single-pass {sum(ps[t]['found_strict_runs'] for t in mom)} of {len(mom) * ns}, chunked {sum(pc[t]['found_strict_runs'] for t in mom)} of {len(mom) * nc}.", ""]
+    md = "\n".join(L) + "\n"
+    low = md.lower()
+    assert not any(w in low for w in WINNER_WORDS), "ranking language in the comparison"
+    return md

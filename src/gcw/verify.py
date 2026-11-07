@@ -204,3 +204,104 @@ def strict_hit(verified_ids: set[str], planted_ids: set[str]) -> bool:
     so for it the threshold is 1.)"""
     n = len(verified_ids & planted_ids)
     return bool(verified_ids) and n >= min(2, len(planted_ids)) and 2 * n >= len(verified_ids)
+
+
+# ------------------------------------------------------------------ chunked mode (Phase 4b): candidates per chunk, item rules AFTER the merge
+def _shape_ok(typ: str, item: Any) -> bool:
+    head = "award" if typ == "awards" else "title"
+    return bool(isinstance(item, dict) and _s(item.get(head)) and _s(item.get("summary"))
+                and len(item[head]) <= (MAX_AWARD if typ == "awards" else MAX_TITLE) and len(item["summary"]) <= MAX_SUMMARY
+                and (typ != "awards" or _s(item.get("member"))))
+
+
+def verify_candidates(report: dict, index: dict[str, dict]) -> tuple[list[dict], dict]:
+    """Evidence checks only (the same rules as verify_report: id exists, not withheld or media, quote 12+ characters and a substring of THAT message,
+    no duplicates, at most 12 evidence per item, at most 10/6/6 items per type). An item becomes a CANDIDATE if its shape is valid and it has at least 1
+    verified evidence message. The item rules (3 evidence on 2 dates for a joke, and so on) are NOT applied here: chunked mode applies them after the merge.
+    Returns ([{type, pos, item}], stats)."""
+    drops: Counter = Counter()
+    cands: list[dict] = []
+    items_in = Counter()
+    ev_total = ev_ok = 0
+    for typ in TYPES:
+        raw = report.get(typ) if isinstance(report, dict) else None
+        if not isinstance(raw, list):
+            continue
+        for pos, item in enumerate(raw):
+            items_in[typ] += 1
+            ev_list = item.get("evidence") if isinstance(item, dict) else None
+            ev_list = ev_list if isinstance(ev_list, list) else []
+            ev_total += len(ev_list)
+            if pos >= CAPS[typ]:
+                drops["over_cap"] += 1
+                continue
+            seen: set = set()
+            good: list[dict] = []
+            for k, ev in enumerate(ev_list):
+                if k >= MAX_EVIDENCE_PER_ITEM:
+                    drops["over_cap"] += 1
+                    continue
+                pid = _check_evidence(ev, index, seen, drops)
+                if pid is not None:
+                    good.append({"message_id": pid, "quote": ev["quote"]})
+            ev_ok += len(good)
+            if not _shape_ok(typ, item):
+                drops["bad_shape"] += 1
+                continue
+            if not good:
+                drops["too_few_evidence"] += 1
+                continue
+            head = "award" if typ == "awards" else "title"
+            kept = {k: item[k] for k in (head, "summary") + (("member",) if typ == "awards" else ())}
+            kept["evidence"] = good
+            cands.append({"type": typ, "pos": pos, "item": kept})
+    stats = {"items_in": sum(items_in.values()), "items_in_by_type": {t: items_in[t] for t in TYPES}, "candidates": len(cands),
+             "evidence_total": ev_total, "evidence_verified": ev_ok, "drop_reasons": dict(drops)}
+    return cands, stats
+
+
+def apply_item_rules(items: dict[str, list[dict]], index: dict[str, dict], *, valid_members: set[str] | frozenset[str]) -> tuple[dict, dict]:
+    """The v1 item rules on items whose evidence is already verified: running joke 3+ distinct evidence messages on 2+ distinct dates; moment 1+;
+    award: the member is a valid token and at least 1 evidence message was written by that member. Order is kept. Returns (report, drop counts)."""
+    drops: Counter = Counter()
+    out: dict[str, list] = {t: [] for t in TYPES}
+    for typ in TYPES:
+        for item in items.get(typ, []):
+            ids = [e["message_id"] for e in item["evidence"]]
+            if typ == "running_jokes":
+                if len(ids) < 3:
+                    drops["too_few_evidence"] += 1
+                    continue
+                if len({index[i]["ts"].date() for i in ids}) < 2:
+                    drops["too_few_dates"] += 1
+                    continue
+            elif not ids:
+                drops["too_few_evidence"] += 1
+                continue
+            if typ == "awards":
+                if item["member"] not in valid_members:
+                    drops["bad_member"] += 1
+                    continue
+                if not any(index[i]["sender"] == item["member"] for i in ids):
+                    drops["no_member_evidence"] += 1
+                    continue
+            out[typ].append(item)
+    return out, dict(drops)
+
+
+def rank_and_cap(report: dict, index: dict[str, dict]) -> tuple[dict, int]:
+    """Caps (10 jokes, 6 moments, 6 awards) ranked by the number of verified evidence messages (descending), ties by date spread (days between the first
+    and last evidence date, descending), then the input order. Returns (capped report, number of items cut)."""
+    cut = 0
+    out: dict[str, list] = {t: [] for t in TYPES}
+    for typ in TYPES:
+        def key(pair):
+            pos, it = pair
+            days = [index[e["message_id"]]["ts"].date() for e in it["evidence"]]
+            spread = (max(days) - min(days)).days if days else 0
+            return (-len(it["evidence"]), -spread, pos)
+
+        ranked = [it for _, it in sorted(enumerate(report.get(typ, [])), key=key)]
+        out[typ] = ranked[: CAPS[typ]]
+        cut += max(0, len(ranked) - CAPS[typ])
+    return out, cut
