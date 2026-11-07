@@ -160,7 +160,8 @@ def test_results_files_hold_counts_and_ids_only_no_chat_text(result, tmp_path):
         assert forbidden not in blob, forbidden
     data = json.loads(j.read_text())
     assert data["n_runs"] == 3 and data["runs"][0]["name"].endswith("-A") and set(data["planted"]) == {"jL", "j1", "j2", "j3", "m1"}
-    assert j.read_text() == json.dumps(result, indent=1, sort_keys=True, ensure_ascii=False) + "\n"  # deterministic
+    assert j.read_text() == json.dumps(evaluate.rounded(result), indent=1, sort_keys=True, ensure_ascii=False) + "\n"  # deterministic
+    assert not re.search(r"\d\.\d{5,}", j.read_text()) and evaluate.rounded({"a": [1 / 3, {"b": 2 / 3}]}) == {"a": [0.3333, {"b": 0.6667}]}
 
 
 def test_markdown_has_ranges_and_n_and_no_winner_language_and_passes_the_repo_scanner(result, tmp_path):
