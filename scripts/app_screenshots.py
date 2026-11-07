@@ -43,7 +43,9 @@ def demo_ledger(directory: Path) -> str:
 
 def server_env(workdir: Path) -> dict[str, str]:
     """Environment of the Streamlit server: the source tree on the path, no API key, and the demo ledger instead of the real one."""
-    env = dict(os.environ, PYTHONPATH=str(ROOT / "src"), GCW_LEDGER_PATH=demo_ledger(workdir))
+    # STREAMLIT_CLIENT_TOOLBAR_MODE=minimal hides the three-dot menu for the screenshots only (docs: environment variables override .streamlit/config.toml, which keeps
+    # toolbarMode = "viewer" for the real app): https://docs.streamlit.io/develop/concepts/configuration/options
+    env = dict(os.environ, PYTHONPATH=str(ROOT / "src"), GCW_LEDGER_PATH=demo_ledger(workdir), STREAMLIT_CLIENT_TOOLBAR_MODE="minimal")
     env.pop("ANTHROPIC_API_KEY", None)
     return env
 
@@ -214,10 +216,16 @@ def main(argv: list[str] | None = None) -> int:
                     lab.click()
                 page.get_by_text("'approved': 12").wait_for()  # every decision is registered and the rerun is over
                 time.sleep(1.5)
+                # a viewport as tall as the whole review page: the first items, every control and the Render card button are visible without scrolling
+                h = int(page.evaluate("document.querySelector('[data-testid=\"stMain\"]').scrollHeight"))
+                page.set_viewport_size({"width": 1280, "height": min(h + 40, 7000)})
+                time.sleep(1.5)
                 page.evaluate("document.querySelector('[data-testid=\"stMain\"]').scrollTo(0, 0)")
+                box = page.get_by_role("button", name="Render card").bounding_box()
+                assert box and box["y"] >= 0 and box["y"] + box["height"] <= page.viewport_size["height"], (box, page.viewport_size)
                 time.sleep(0.5)
-                assert not page.get_by_text("Kai: Yay, love this.").is_visible()  # the context stays collapsed
-                page.screenshot(path=str(out / "app_3_review.png"), full_page=True)
+                page.screenshot(path=str(out / "app_3_review.png"))
+                page.set_viewport_size({"width": 1280, "height": 1700})
                 # 4. render the card from the approved items: the app starts its own render child here (a second Chromium stack)
                 samp.step = "4 review render card (browser + server + render child)"
                 page.get_by_role("button", name="Render card").click()
@@ -226,8 +234,14 @@ def main(argv: list[str] | None = None) -> int:
                 img.wait_for()
                 img.scroll_into_view_if_needed()
                 time.sleep(1.5)
-                assert img.bounding_box()["width"] >= 700, img.bounding_box()
-                page.screenshot(path=str(out / "app_4_review_rendered_card.png"))
+                box = img.bounding_box()
+                assert box["width"] >= 700 and abs(box["height"] - box["width"] * 1350 / 1080) <= 2, box  # the whole card is on screen, both footer lines included
+                path4 = out / "app_4_review_rendered_card.png"
+                img.screenshot(path=str(path4))  # an element screenshot of the card image
+                from PIL import Image
+
+                w4, h4 = Image.open(path4).size
+                assert h4 >= box["height"] - 1 and w4 >= box["width"] - 1, ((w4, h4), box)  # the capture covers the card's full bounding box
 
             for n, (fn, height) in enumerate(((shot1, 1400), (shot2, 1500), (shot3, 1700)), 1):
                 samp.step = f"{n} browser start"

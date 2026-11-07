@@ -72,7 +72,7 @@ It binds to 127.0.0.1 only (`.streamlit/config.toml`; usage statistics are off) 
 - **Review.** Every verified item with its evidence quotes and two messages before and after (display names); approve, reject or rank; only approved items render. You can also load a saved `.report.json` from a CLI run; it is re-verified against the loaded chat and window, so an unverified claim cannot reach the card.
 - **Limits.** Chat-derived text is drawn with `st.text` or dataframes, never as markdown or HTML. Measured quality: the numbers in `docs/results/` (single-pass up to 296,849 tokens, chunked on 889,497 tokens, both n = 1 on synthetic chats). Tested on macOS only; uploads were tested through Streamlit's test harness, not through a real browser file dialog.
 
-**Screenshots.** All four are of the bundled synthetic demo chat (no real chat); the harness is `scripts/app_screenshots.py` (it uses a throw-away cost ledger with one fictional US$0.05 entry, `GCW_LEDGER_PATH`, so no image shows the real ledger).
+**Screenshots.** All four are of the bundled synthetic demo chat (no real chat); the harness is `scripts/app_screenshots.py` (it uses a throw-away cost ledger with one fictional US$0.05 entry, `GCW_LEDGER_PATH`, so no image shows the real ledger, and hides the three-dot menu on its own server only, through `STREAMLIT_CLIENT_TOOLBAR_MODE=minimal`; the app's `.streamlit/config.toml` keeps `toolbarMode = "viewer"`).
 
 ![Step 3: the stats card rendered in the app, 720 px wide, AI sections off](docs/img/app_1_stats_card.png)
 *Stats card step after the real Render click (synthetic chat, stats-only mode).*
@@ -80,11 +80,11 @@ It binds to 127.0.0.1 only (`.streamlit/config.toml`; usage statistics are off) 
 ![Step 4: the payload preview before consent, checkbox unticked, Run disabled](docs/img/app_2_payload_preview_before_consent.png)
 *Payload preview before consent: nothing has been sent; the checkbox is unticked and Run is disabled. The $0.05 spend is the fictional demo ledger.*
 
-![Step 5: review list with approve, reject and rank controls, context collapsed](docs/img/app_3_review.png)
-*Review step with a saved model output loaded through the saved-report upload and its run log. The decisions in this image are auto-approved demo decisions (every item set to approved by the screenshot script).*
+![Step 5: the whole review list with approve, reject and rank controls, context collapsed, and the Render card button at the bottom](docs/img/app_3_review.png)
+*Review step (a tall image: the whole page, from the first item to the Render card button, with no scrolling) with a saved model output loaded through the saved-report upload and its run log. The decisions in this image are auto-approved demo decisions (every item set to approved by the screenshot script).*
 
-![Step 5 after Render card: the card with the AI zone filled](docs/img/app_4_review_rendered_card.png)
-*The rendered card after "Render card"; its stats cover the same window as the saved run (to 2026-02-08).*
+![The rendered card after Render card, whole card with the AI zone filled and both footer lines](docs/img/app_4_review_rendered_card.png)
+*The rendered card after "Render card" (an element screenshot of the card image, complete); its stats cover the same window as the saved run (to 2026-02-08).*
 
 The review source is a saved config A run on the synthetic chat (stamp 20261106T202238, slice to 2026-02-08). I judged it to be the same run as the earlier demo card because its visible fields match (the joke and moment titles and quotes, both award members, and the "13 proposed, 12 verified" counts); the card's source data was not saved, so that is a judgement, not a check of the whole run. The page refuses a run log whose message count differs from the chosen window.
 

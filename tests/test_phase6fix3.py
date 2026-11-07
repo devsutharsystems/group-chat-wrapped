@@ -90,3 +90,9 @@ def test_a_run_log_for_another_window_is_refused_and_its_message_count_is_read(e
     at.file_uploader(key="log_up").upload("demo.json", json.dumps({"messages": 999, "stats": {"items_in": 0}}).encode()).run()
     assert any("covers 999 messages but the window" in e.value for e in at.error) and not at.exception
     assert not [r for r in at.radio if str(r.key).startswith("dec_")]
+
+
+def test_only_the_screenshot_server_hides_the_menu_and_the_app_config_keeps_its_setting(tmp_path):
+    assert shots.server_env(tmp_path)["STREAMLIT_CLIENT_TOOLBAR_MODE"] == "minimal"
+    cfg = (Path(__file__).resolve().parents[1] / ".streamlit" / "config.toml").read_text(encoding="utf-8")
+    assert 'toolbarMode = "viewer"' in cfg and "minimal" not in cfg
