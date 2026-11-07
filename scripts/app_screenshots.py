@@ -225,6 +225,10 @@ def main(argv: list[str] | None = None) -> int:
                 assert box and box["y"] >= 0 and box["y"] + box["height"] <= page.viewport_size["height"], (box, page.viewport_size)
                 time.sleep(0.5)
                 page.screenshot(path=str(out / "app_3_review.png"))
+                from PIL import Image
+
+                p3 = out / "app_3_review.png"  # the full-height capture is cropped to the first items; the Render card button sits below the list
+                Image.open(p3).crop((0, 0, 1280, 1100)).save(p3, optimize=True)
                 page.set_viewport_size({"width": 1280, "height": 1700})
                 # 4. render the card from the approved items: the app starts its own render child here (a second Chromium stack)
                 samp.step = "4 review render card (browser + server + render child)"

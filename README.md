@@ -1,95 +1,183 @@
 # Group Chat Wrapped
 
-Spotify-Wrapped-style card for a WhatsApp group (Python, pandas, Claude Haiku). Stats-only mode (no AI, no API calls) works today; the AI sections come later.
+![A card built from the bundled synthetic chat: counted statistics on top, AI-found items below](docs/img/app_4_review_rendered_card.png)
 
-## Setup
+*A card from the bundled synthetic demo chat (no real chat). The AI items were loaded from a saved model run and approved in the review step; see the screenshots section for what that means.*
+
+Group Chat Wrapped turns a WhatsApp group export into a one-page card: counted statistics (top talkers, busiest day, longest silence, response times and so on) and, optionally, items found by a language model (running jokes, moments, awards). It is a Python package (pandas, Playwright for rendering, Claude Haiku for the AI step) with a command-line interface and a local Streamlit app.
+
+## Why it differs from common WhatsApp analysers
+
+1. **Every AI claim is checked in code against the real message.** A running joke, moment or award is kept only if each of its evidence quotes is an exact substring of the cited message, and if it meets the item rules (a joke needs several quotes on more than one date). Items that fail are dropped, and the drop counts by reason are reported in the run output and in `docs/results/`. A claim the model cannot back with a real quote does not reach the card.
+2. **Privacy by design, with the limits stated.** Names are replaced before anything is sent, a keyword screen withholds sensitive messages, and `preview` shows the exact text that would be sent. Stats-only mode (the default) makes no network call. AI mode needs an explicit consent step and runs under a cost cap. Pseudonymised text is still sent to Anthropic in AI mode; see the privacy section.
+3. **A measured evaluation on a synthetic chat with planted ground truth.** The test chats contain jokes, moments and other items planted at known positions, so recall and precision-style numbers are computed rather than asserted. The numbers, their sample sizes and their limits are below; they are not claims about real chats.
+
+## Quickstart
 
 ```sh
 python3 -m venv .venv
 PIP_CACHE_DIR=.cache/pip .venv/bin/pip install -r requirements.txt
-PIP_CACHE_DIR=.cache/pip .venv/bin/pip install .             # users: regular (non-editable) install
+PIP_CACHE_DIR=.cache/pip .venv/bin/pip install .
 PLAYWRIGHT_BROWSERS_PATH=.cache/ms-playwright .venv/bin/python -m playwright install chromium
 ```
 
-Developers run from the source tree with `PYTHONPATH=src .venv/bin/python -m gcw ...` (no editable install). macOS can flag the `.pth` file of an editable install as hidden and Python 3.13+ skips hidden `.pth` files; that is the likely cause of the failed editable install here, not verified.
+Developers can run from the source tree with `PYTHONPATH=src` instead of installing (an editable install can fail on macOS because the `.pth` file is flagged hidden; the cause is likely, not verified).
 
-## Stats card (no AI, no API calls)
+**Stats only (no API, no network).** Copy `aliases.example.json` to `aliases.json` (gitignored) to show display names.
 
 ```sh
-.venv/bin/python -m gcw stats-card path/to/chat.txt --out out/card.png [--aliases aliases.json] [--since 2026-01-01] [--until 2026-06-30] [--date-order mdy|dmy]
+PLAYWRIGHT_BROWSERS_PATH=.cache/ms-playwright .venv/bin/python -m gcw stats-card path/to/chat.txt --out out/card.png --aliases aliases.json
 ```
 
-Copy `aliases.example.json` to `aliases.json` (gitignored) to show display names on the card. Run renders under `nice -n 10`: one Chromium, one page, closed afterwards.
-
-## Known limits
-
-- Cards were rendered and checked on macOS with Apple Color Emoji only. On Linux, emoji need a colour emoji font (for example Noto Color Emoji); this is unverified.
-- Demo PNGs are rendered locally and committed. CI does not render cards.
-- Chat timestamps have minute resolution, so response-time medians are coarse (see `docs/stats-verification.md`).
-- 24h Android, iOS and multi-line formats are not yet checked against real exports (`docs/PRD.md` section 8).
-
-## Privacy
-
-`python -m gcw preview CHAT --aliases aliases.json` shows the exact text that would be sent to the model (names replaced by `Member N`, links, emails, phones and long numbers redacted, sensitive-keyword messages withheld). Copy `aliases.example.json` to `aliases.json` (gitignored) and list your members and nicknames. Pseudonymised text IS sent to Anthropic in AI mode. Limits: only names and nicknames listed in `aliases.json` are replaced (a surname alone, for example "ALEX KIM" with only "Alex Kim" and "Alex" listed, becomes "Member 2 KIM"); members whose first name is a common word (Will, Hope) need `"case_sensitive": true`; the keyword screen is English-only. See `docs/privacy.md`.
-
-## AI analysis (3b)
-
-`python -m gcw analyze CHAT --aliases aliases.json --slice-end 2026-02-08 --config A` prints the payload preview and a rough size and sends nothing. Add `--count` for the exact token count (free, but it sends the pseudonymised payload) and `--confirm` to run (cost guard, $0.15 phase budget, refused over 95,000 tokens). Every claim is checked in code: a running joke, moment or award is kept only if its quotes are exact substrings of the cited messages (see `docs/PRD.md` section 4). Measured cost, token counts and recall of full-chat runs on the synthetic chat are in `docs/results/eval_full_A.md` (costs computed from usage fields times list prices, see `docs/results/README.md`).
-
-**Saved responses.** `--save-response` (off by default) also writes the raw model response and the verified report into `out/runs/`. They contain pseudonymised quotes from your chat: a run on a real chat with the flag leaves them in the gitignored `out/runs/`, so delete them afterwards. Without the flag only a log (config, token counts, cost, verification counts, prompt hash) is written.
-
-**What was tested against prompt injection:** a small probe on one synthetic chat, recorded in `docs/results/injection_probe.md`. That is a probe, not a guarantee: this README does not claim the defence is robust, and real chats may contain phrasings that work. Every model claim is still checked in code against the exact messages, which limits what an injected instruction can put on the card.
-
-## The AI card (3c)
-
-1. Run `analyze ... --confirm --save-response` (the card needs the saved verified report).
-2. `python -m gcw review out/runs/<run>.json` lists the items with ids; approve with `--approve ID ...` or reject with `--reject ID ...`. Review files live in `out/reviews/` (gitignored). Pending and rejected items never render.
-3. `python -m gcw card CHAT --aliases aliases.json --report out/runs/<run>.json --review out/reviews/<run>.json --until YYYY-MM-DD --out out/card.png` renders Zone 1 (counted stats) plus Zone 2 (approved items, names shown instead of Member tokens). `--until` must equal the analysed slice's end. `--auto-approve-synthetic` exists only for the frozen synthetic chat and says so in the footer.
-
-Configs B and C leave the `thinking` parameter out (the API default is adaptive thinking), but the model used zero thinking tokens in every slice run, so they differ from A only through the effort setting; do not read them as "thinking enabled".
-
-The card's AI text is built for phone feeds: every text in Zone 2 and the footer is at least 20 px (summaries and quotes 22 px), so long titles, summaries and quotes are truncated with an ellipsis on the card (the verified text is untouched). `review --rank ID=N` reorders items of a type; with no ranks the model's order is used.
-
-**Long chats.** `analyze --mode chunked` (or `--mode auto`, which runs single-pass up to 300,000 exact tokens and switches to chunked above with the warning "chat above 300,000 tokens; using chunked map-reduce (single-pass quality at this size was not demonstrated)"; `--mode single` stays available up to the model limit) splits the chat at day boundaries, runs the same request per chunk, merges the findings with one extra grouping call and re-applies every rule after the merge. Measured behaviour on the synthetic chat, compared with single-pass: `docs/results/compare_single_vs_chunked.md`. Single-pass has only been tested at the size recorded in `docs/results/eval_full_A.md`; the chunked mode has been tested on that chat and once on the 889,497-token large chat (5 of 10 planted items found, n = 1).
-
-**Size actually tested.** Single-pass was run on a synthetic chat of 889,497 tokens (one run, config A) and on one of 269,809 tokens (three runs); see `docs/results/eval_large_A.md` and `docs/results/eval_full_A.md`. At the larger size the request was accepted, but the model's answer mostly failed verification (13 of 25 evidence messages verified, no joke kept, no planted item found), so the large run does not show that a million-token chat works well. Single run (n = 1): 39.8 s, computed cost $0.4483, 52% of evidence verified, 0 of 10 planted items found; the large chat holds the same 67 planted lines as the smaller one in 3.3 times more chat (density 0.39% against 1.30%), so this result is confounded by density. Phase 5b added, all n = 1 (`docs/results/compare_large.md`): single-pass on the first third of the large chat (296,849 tokens) found its 3 scored planted items (29 of 37 evidence verified, $0.1534), and the chunked mode on the whole large chat (11 chunks) found 5 of 10 planted items with 245 of 282 map evidence verified, at $0.1029. **Usable recall is not the context window size; the 1M window accepts the input, but quality at that size was not demonstrated.** The 5b control does not support a density-only explanation, and it does not isolate length either: the cause of the 0 of 10 is not established. One run per row, one config, synthetic data; costs are computed from the usage fields (a request above 100,000 prompt tokens is billed at the higher tier) and not reconciled with the Console.
-
-**Why 300,000 (provisional).** The 1M window accepted an 889,497-token request in one call ($0.4483, 39.8 s, n = 1), but strict recall was 0 of 10 planted items: 5 of 7 planted jokes had a proposed item quoting a planted line, and none of those items carried the 3 verified evidence messages the joke rule needs. Chunked mode on the same chat found 5 of 10 planted items for $0.1029 (n = 1). Single-pass worked at 269,809 tokens (n = 3) and 296,849 tokens (n = 1) on development items only, and failed at 889,497 (n = 1); nothing in between was tested. This replaces the original plan of falling back only at the model limit (`docs/PRD.md` R5, `docs/results/compare_large.md`, `docs/results/diag_large_A.md`).
-
-## The app (local only)
+**AI mode.** The key comes from the `ANTHROPIC_API_KEY` environment variable or a `.env` file that you create (gitignored); it is never printed. Every call is explicit and passes the cost guard (`GCW_COST_CAP_USD` per run, `GCW_PROJECT_CAP_USD` for the project).
 
 ```sh
-PIP_CACHE_DIR=.cache/pip .venv/bin/pip install -r requirements.txt     # streamlit is pinned there
+.venv/bin/python -m gcw preview path/to/chat.txt --aliases aliases.json                      # the exact text that would be sent; no API call
+.venv/bin/python -m gcw analyze path/to/chat.txt --aliases aliases.json --mode auto --count   # exact token count (sends the text to count_tokens), no generation
+.venv/bin/python -m gcw analyze path/to/chat.txt --aliases aliases.json --mode auto --confirm --save-response
+.venv/bin/python -m gcw review out/runs/<run>.json                                           # list items; --approve ID ... / --reject ID ...
+.venv/bin/python -m gcw card path/to/chat.txt --aliases aliases.json --report out/runs/<run>.json --review out/reviews/<run>.json --until YYYY-MM-DD --out out/card.png
+```
+
+`--save-response` writes pseudonymised quotes into the gitignored `out/runs/`; delete them afterwards. `--mode auto` runs single-pass up to 300,000 exact tokens and chunked map-reduce above, printing a warning; the threshold is provisional (see Limits).
+
+**The app.**
+
+```sh
 PLAYWRIGHT_BROWSERS_PATH=.cache/ms-playwright PYTHONPATH=src .venv/bin/streamlit run src/gcw/app.py
 ```
 
-It binds to 127.0.0.1 only (`.streamlit/config.toml`; usage statistics are off) and has no hosted upload endpoint: there is no server to upload to, the page runs on your machine. Steps in the sidebar: 1 Load (a `.txt` or a `.zip` holding exactly one `.txt`, or the bundled synthetic demo chat), 2 Settings (aliases, date window, date order, mode), 3 Stats card, 4 AI, 5 Review.
+## How it works
 
-- **The chat stays in memory.** Uploaded bytes are never written to disk; a zip is read in memory, must hold exactly one `.txt` (macOS `__MACOSX/` entries are ignored), is limited to 50 MB uncompressed, and encrypted members are refused. The card is rendered in a child process (`nice -n 10`, Chromium `--disable-gpu`, one at a time, no network) that receives the HTML on stdin and returns the PNG on stdout. What the app writes to disk: run logs in `out/runs/` (counts, tokens, cost; no chat text), review files in `out/app/` (item ids, types, statuses and ranks only), and the cost ledger. A downloaded card PNG contains what you approved for it.
-- **Stats-only mode (default) makes no network call** and needs no API key.
-- **Consent.** In AI mode the page first shows the exact pseudonymised text it would send (20 fixed-seed lines), replacement counts, the withheld count, a rough token estimate (bytes / 2.37, labelled rough) and a worst-case cost upper bound against `GCW_COST_CAP_USD` and `GCW_PROJECT_CAP_USD`. Nothing leaves the machine, not even the exact token count (which sends the text), until you tick "I understand that pseudonymised message text will be sent to Anthropic, and the group members consented" and press Run. Run is disabled without the checkbox, without a key, or when the bound is above a cap. After Run: exact `count_tokens`, caps re-checked, then the analysis through the cost guard with `confirm=True`. The page shows only "key loaded: yes/no".
-- **What leaves the machine:** only the pseudonymised, redacted text of the chosen window, and only in AI mode after consent. Names you did not list in the aliases table, and nicknames or surnames you left out, are sent as written. The keyword screen is English-only (`docs/privacy.md`).
-- **Review.** Every verified item with its evidence quotes and two messages before and after (display names); approve, reject or rank; only approved items render. You can also load a saved `.report.json` from a CLI run; it is re-verified against the loaded chat and window, so an unverified claim cannot reach the card.
-- **Limits.** Chat-derived text is drawn with `st.text` or dataframes, never as markdown or HTML. Measured quality: the numbers in `docs/results/` (single-pass up to 296,849 tokens, chunked on 889,497 tokens, both n = 1 on synthetic chats). Tested on macOS only; uploads were tested through Streamlit's test harness, not through a real browser file dialog.
+1. **Parse** (`parser.py`): Android and iOS export formats, system and deleted lines separated, day/month order inferred with a warning when ambiguous.
+2. **Stats** (`stats.py`, `card.py`): counted statistics over a date window, rendered to a 1080x1350 PNG by headless Chromium (no network during the render).
+3. **Privacy layer** (`privacy.py`, `textnorm.py`): sensitive-keyword screen, link, email, phone and number redaction, member names to `Member N`; output lines look like `m000123 | date time | Member 3 | text`.
+4. **Analysis** (`analyze.py`, `llm.py`): one request with a frozen v1 prompt and JSON schema; Claude Haiku returns running jokes, moments and awards with `{message_id, quote}` evidence. **Chunked mode** (`chunked.py`) splits the chat at day boundaries, runs the same request per chunk, and merges the findings with one extra call that only groups candidate ids; the evidence union is built by code and every rule is re-applied after the merge.
+5. **Verification** (`verify.py`): ids must exist and not be withheld or media; quotes must be long enough and exact substrings of the cited message after normalisation; item rules and per-type caps are applied; anything else is dropped and counted.
+6. **Cost guard** (`cost.py`): explicit confirm for every call, per-run and project caps, a ledger of computed costs.
+7. **Review and card** (`review.py`, `display.py`): approve, reject or rank each verified item; only approved items render; names replace `Member N` tokens on the card.
+8. **Evaluation** (`evaluate.py`, `dataset.py`): scoring against planted ground truth for the frozen synthetic chats, whose hashes are verified first.
+9. **App** (`app.py`, `appcore.py`, `render_child.py`): the Streamlit front end; the chat stays in memory; the card is rendered in a child process.
 
-**Screenshots.** All four are of the bundled synthetic demo chat (no real chat); the harness is `scripts/app_screenshots.py` (it uses a throw-away cost ledger with one fictional US$0.05 entry, `GCW_LEDGER_PATH`, so no image shows the real ledger, and hides the three-dot menu on its own server only, through `STREAMLIT_CLIENT_TOOLBAR_MODE=minimal`; the app's `.streamlit/config.toml` keeps `toolbarMode = "viewer"`).
+## Privacy
 
-![Step 3: the stats card rendered in the app, 720 px wide, AI sections off](docs/img/app_1_stats_card.png)
+- **Replaced before sending:** member names and listed nicknames become `Member N`; links, emails, phone-like and long digit strings become placeholders; messages that match the English sensitive-keyword list are replaced by `[withheld: sensitive]`. Full rules: `docs/privacy.md`.
+- **What leaks:** nicknames and surnames that are not listed in your aliases file stay in the text; names in non-Latin scripts may; the keyword screen is English-only and cannot catch euphemism, other languages or context. Over-redaction also happens (long numbers, some domain-like strings).
+- **What is sent:** in AI mode, the pseudonymised and redacted text of the chosen window (plus a fixed system prompt) is sent to Anthropic. The exact token count (`count_tokens`) also receives that text. Stats-only mode sends nothing.
+- **Consent:** the CLI needs `--count` or `--confirm` to send anything; the app shows the exact payload preview and sends nothing until you tick the consent box (pseudonymised text goes to Anthropic and the group members consented) and press Run.
+- Pseudonymisation is not anonymisation: a chat can often be recognised from its content.
+
+## Evaluation
+
+All numbers below are generated from `docs/results/*.json` and memory logs by `scripts/build_readme_tables.py`; a test fails if they are stale. Strict recall counts a planted item as found only when the verified evidence of one AI item sits mostly on that item's planted messages. Planted density is the share of payload messages that are planted lines.
+
+<!-- BEGIN:eval_table -->
+| row | n | input tokens per run | planted density | strict recall (found of in-scope item-runs) | rule-compliant rate | unplanted items per run (awards / moments / jokes) | cost per run (USD) | latency per run (s) |
+|---|---|---|---|---|---|---|---|---|
+| dense 270K tokens, single-pass | 3 | 269,809 | 1.30% | 25 of 30 | 94%, range 92% to 97% | 2.3 / 2.3 / 0.7 | 0.1402, range 0.1392 to 0.1410 | 10.5, range 9.7 to 11.7 |
+| dense 270K tokens, chunked | 3 | 282,704 (sum over calls) | 1.30% | 27 of 30 | 90%, range 88% to 93% | 5.7 / 4.0 / 2.7 | 0.0329, range 0.0323 to 0.0335 | 41.4, range 38.1 to 46.4 (sum of call latencies) |
+| sparse chat, first third, single-pass | 1 | 296,849 | 0.36% | 3 of 3 | 78% | 3.0 / 3.0 / 0.0 | 0.1534 | 13.8 |
+| sparse chat, 889K tokens, single-pass | 1 | 889,497 | 0.39% | 0 of 10 | 52% | 0.0 / 3.0 / 0.0 | 0.4483 | 39.8 |
+| sparse chat, 889K tokens, chunked | 1 | 923,596 (sum over calls) | 0.39% | 5 of 10 | 87% | 6.0 / 6.0 / 5.0 | 0.1029 | 102.1 (sum of call latencies) |
+<!-- END:eval_table -->
+
+Rows with n = 1 are single observations. The large-chat rows hold the same planted lines as the dense chat in a longer chat, so planted density differs between rows (see the density column) and the rows are not a controlled comparison (`docs/results/compare_large.md`, `docs/results/diag_large_A.md`).
+
+**Cost, latency and memory.**
+
+<!-- BEGIN:cost_block -->
+Cost is computed from the usage fields times list prices (a request above 100,000 prompt tokens is billed whole at the higher tier) and is not reconciled with the Console. Chunked wall-clock time is shorter than the sum of call latencies because map calls run in parallel.
+
+| row | cost per run (USD) | latency per run (s) | wall-clock per run (s, chunked only) |
+|---|---|---|---|
+| dense 270K tokens, single-pass | 0.1402, range 0.1392 to 0.1410 | 10.5, range 9.7 to 11.7 | n/a |
+| dense 270K tokens, chunked | 0.0329, range 0.0323 to 0.0335 | 41.4, range 38.1 to 46.4 | 18.5, range 17.1 to 20.9 |
+| sparse chat, first third, single-pass | 0.1534 | 13.8 | n/a |
+| sparse chat, 889K tokens, single-pass | 0.4483 | 39.8 | n/a |
+| sparse chat, 889K tokens, chunked | 0.1029 | 102.1 | 42.0 |
+
+Memory and time of the card render paths (Memory and wall-clock measurements recorded from the output of the commands named in 'source'. One run each, macOS, M2, 8 GB. Summed RSS probably overcounts pages shared between processes (unverified). Not a benchmark.)
+
+| render path | wall-clock (s) | largest process (MB) | summed over the process tree (MB) |
+|---|---|---|---|
+| stats card, app render path (no server, no screenshot browser) | 2.97 | 138 | 509 |
+| AI card, app render path (saved config A run, all items approved) | 5.68 | 244 | 455 |
+
+Screenshot harness (a development tool, not part of the app's footprint; ceiling 1433 MB), peak summed RSS per step:
+
+| step | peak (MB) |
+|---|---|
+| server start | 198 |
+| browser start | 704 |
+| stats card (browser + server + render child) | 1171 |
+| payload preview (browser + server) | 814 |
+| review (browser + server) | 959 |
+| review with Render card (browser + server + render child) | 1088 |
+<!-- END:cost_block -->
+
+**Precision.**
+
+<!-- BEGIN:precision_block -->
+Precision: not yet measured (hand-rating pending)
+<!-- END:precision_block -->
+
+**Frozen identifiers** (prompts, schema and verification rules are frozen; the datasets are checked by hash before any evaluation):
+
+<!-- BEGIN:versions -->
+| identifier | SHA-256 |
+|---|---|
+| `PROMPT_VERSION (v1 system prompt and schema)` | `a4498b04960adc6bf7fd664cf5c6ef95dc206811d3169a02063b7d7952febc56` |
+| `REDUCE_PROMPT_VERSION` | `6c010e09578d01f14dd22c3d553dbd45dad23b3a4fd3b53f173fe22f3c38390a` |
+| `synthetic/frozen/chat_synthetic.txt` | `b6d3add40ae93fe79a10f79d19a0a2b374dd0ffb5c3222feaf0425a12cae13b4` |
+| `synthetic/frozen/ground_truth.json` | `b3f2f5afb24df2c271fd9b3ddc1dd57c41231655275e2fb18e4672f79aca5952` |
+| `synthetic/frozen_large/chat_synthetic_large.txt` | `0a9f76f0117608ecd4fd3cdc503202e55a15dbe8a2427fc1d1d09d0b7c870b6e` |
+| `synthetic/frozen_large/ground_truth.json` | `b442a82bc44249fe5e49dfeb5021f0539179072f188912946d653941be47f562` |
+<!-- END:versions -->
+
+## The app
+
+The app runs on 127.0.0.1 only (`.streamlit/config.toml`; usage statistics off) and has no hosted upload endpoint. Steps: load (a `.txt`, a `.zip` holding exactly one `.txt`, or the bundled synthetic chat), settings, stats card, AI (payload preview, consent, run), review. The chat stays in memory; the card is rendered in a child process; run logs hold counts only; review files hold item ids and statuses only.
+
+![Step 3: the stats card rendered in the app, AI sections off](docs/img/app_1_stats_card.png)
 *Stats card step after the real Render click (synthetic chat, stats-only mode).*
 
 ![Step 4: the payload preview before consent, checkbox unticked, Run disabled](docs/img/app_2_payload_preview_before_consent.png)
-*Payload preview before consent: nothing has been sent; the checkbox is unticked and Run is disabled. The $0.05 spend is the fictional demo ledger.*
+*Payload preview before consent: nothing has been sent; the checkbox is unticked and Run is disabled. The spend figure comes from a fictional demo ledger.*
 
-![Step 5: the whole review list with approve, reject and rank controls, context collapsed, and the Render card button at the bottom](docs/img/app_3_review.png)
-*Review step (a tall image: the whole page, from the first item to the Render card button, with no scrolling) with a saved model output loaded through the saved-report upload and its run log. The decisions in this image are auto-approved demo decisions (every item set to approved by the screenshot script).*
+![Step 5: the first review items with approve, reject and rank controls, context collapsed](docs/img/app_3_review.png)
+*Review step, cropped to the first items; the Render card button sits below the list. A saved model output is loaded through the saved-report upload with its run log. The decisions in this image are auto-approved demo decisions (every item set to approved by the screenshot script).*
 
 ![The rendered card after Render card, whole card with the AI zone filled and both footer lines](docs/img/app_4_review_rendered_card.png)
-*The rendered card after "Render card" (an element screenshot of the card image, complete); its stats cover the same window as the saved run (to 2026-02-08).*
+*The rendered card after "Render card" (an element screenshot of the card image); its stats cover the same window as the saved run.*
 
-The review source is a saved config A run on the synthetic chat (stamp 20261106T202238, slice to 2026-02-08). I judged it to be the same run as the earlier demo card because its visible fields match (the joke and moment titles and quotes, both award members, and the "13 proposed, 12 verified" counts); the card's source data was not saved, so that is a judgement, not a check of the whole run. The page refuses a run log whose message count differs from the chosen window.
+The review source is a saved config A run on the synthetic chat that I judged to be the same run as the earlier demo card, based on its visible fields (the joke and moment titles and quotes, both award members, and the proposed and verified counts match); the card's source data was not saved, so that is a judgement, not a check of the whole run. The page refuses a run log whose message count differs from the chosen window. The screenshots come from `scripts/app_screenshots.py`, a development tool with its own memory ceiling (see the table above), not part of the app's footprint.
 
-**Measured footprint** (macOS, M2, 8 GB; one run each, not a benchmark):
-- App render path (appcore to the render child, no server, no screenshot browser), stats-only on the demo chat: 2.97 s wall-clock, 138 MB for the largest process, 509 MB summed over the process tree (`guarded.py`); the CLI `stats-card` gives a byte-identical PNG (same SHA-256), 1080x1350.
-- AI-card render path (app render child, saved config A run, all items approved, no server, no screenshot browser): 5.68 s wall-clock, 244 MB for the largest process, 455 MB summed over the process tree; its PNG is byte-identical to `gcw card ... --auto-approve-synthetic --until 2026-02-08` (same SHA-256, 1080x1350), given the run log's proposed count and the synthetic footer wording.
-- Screenshot harness (server plus one browser at a time; summed RSS of the whole tree, MB): server start 191-221; browser started 674-720; stats-card step with the real Render click (harness browser, server and the app's own render child) 1,015 to 1,167 over four runs, 1,015 in the run that produced the committed images; payload-preview step about 811; review step about 954; review with the app's Render card (harness browser, server and render child) 1,079; the final four-image run peaked at 1,135 MB in the stats-card step. The system-wide free memory reported by `memory_pressure` was 50% before and 47% after the final run.
-- The harness is a dev tool and is not part of the app's footprint. Its sampler ceiling is 1.4 GB, for that script only (CLAUDE.md keeps 1 GB elsewhere): the harness holds one browser and its Node driver while the app starts its own render child (a second Chromium stack and a second Node driver), the other project's benchmark that the 1 GB rule protected has finished, and summed RSS probably overcounts pages the processes share (unverified).
+## Limits
+
+- The test chats are synthetic and their planted items are easier than real jokes; results say nothing certain about real chats. No real chat has been analysed in this repository, and dev items were seen during development, so the numbers are not blind.
+- Sample sizes are small: n is shown in every table row, and rows with n = 1 are single observations on one configuration.
+<!-- BEGIN:scale_limits -->
+- Single-pass on the sparse chat at 889,497 tokens found 0 of 10 planted items (n = 1); chunked on the same chat found 5 of 10 (n = 1). The context window accepts the request; quality at that size was not demonstrated.
+- Single-pass at 269,809 tokens on the dense chat found 25 of 30 planted item-runs (n = 3); on the first third of the sparse chat (296,849 tokens) it found 3 of 3 (n = 1). These sizes were tested on development items that were seen during development.
+<!-- END:scale_limits -->
+- The model's context window accepts a request of about a million tokens, but usable recall is not the window size: quality at that size was not demonstrated.
+- `--mode auto` switches to chunked above 300,000 exact tokens. The threshold is provisional and was set from a handful of runs (see `docs/PRD.md` R5); it replaced an earlier plan to fall back only at the model limit.
+- The planted long joke jL does not test long-range dependence: it has enough evidence inside single chunks.
+- The per-type caps rank by evidence count and date spread, which disadvantages moments (one-quote items); chunked and single-pass differ partly because of this.
+- Precision is reported only where the table above shows it; until the hand ratings exist, no precision figure is claimed.
+- The prompt-injection defence was probed on one synthetic chat with a few phrasings (`docs/results/injection_probe.md`); the README does not claim it is robust. Verification in code limits what an injected instruction can put on the card, nothing more.
+- Chat timestamps have minute resolution, so response-time medians are coarse (`docs/stats-verification.md`).
+- The sensitive-keyword screen and the laugh detector are English-only; many harmless messages are withheld by the keyword list, and euphemism, other languages and context are not caught.
+- Names, nicknames and surnames that are not listed in the aliases file leak into the text sent to Anthropic; names that are common words need `case_sensitive`; non-Latin scripts are untested.
+- Android multi-line messages, iOS exports and 24-hour formats were tested on generated data only, not on real exports (`docs/PRD.md` section 8).
+- Costs are computed from the usage fields times list prices and are not reconciled with the Console; a request above 100,000 prompt tokens is billed whole at the higher tier.
+- Everything was developed and checked on macOS (M2, 8 GB). Cards need a colour emoji font on Linux; this is unverified. The rendered cards were checked with Apple Color Emoji only.
+- One config (A) and one prompt version (v1) were evaluated; the other configs differ only through the effort setting.
+
+## History and publishing
+
+The git history of this repository is rewritten once before publishing, to remove build artefacts and local paths. Old-to-new commit hashes are listed in `docs/results/commit_map.md`, which the rewrite step writes. Until that step is done, `scripts/prepublish_check.py` fails, by design.
+
+## Licence
+
+MIT (`LICENSE`).

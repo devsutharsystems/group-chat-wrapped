@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "note": "Memory and wall-clock measurements recorded from the output of the commands named in 'source'. One run each, macOS, M2, 8 GB. Summed RSS probably overcounts pages shared between processes (unverified). Not a benchmark.",
+  "render_paths": [
+    {"name": "stats card, app render path (no server, no screenshot browser)", "wall_clock_s": 2.97, "largest_process_bytes": 138428416, "process_tree_mb": 509,
+     "source": "/usr/bin/time -l and scripts guarded.py on a plain script calling appcore.render_png_bytes (Phase 6-fix)"},
+    {"name": "AI card, app render path (saved config A run, all items approved)", "wall_clock_s": 5.68, "largest_process_bytes": 244498432, "process_tree_mb": 455,
+     "source": "/usr/bin/time -l and guarded.py on pytest -m slow -k ai_card (Phase 6-fix3)"}
+  ],
+  "screenshot_harness": {
+    "ceiling_mb": 1433,
+    "peak_total_rss_mb_per_step": [
+      ["server start", 198], ["browser start", 704], ["stats card (browser + server + render child)", 1171], ["payload preview (browser + server)", 814],
+      ["review (browser + server)", 959], ["review with Render card (browser + server + render child)", 1088]
+    ],
+    "source": "scripts/app_screenshots.py, the run that produced the committed images (Phase 6-fix4)"
+  }
+}
