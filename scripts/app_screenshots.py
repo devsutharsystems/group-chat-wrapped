@@ -1,4 +1,4 @@
-"""Three headless screenshots of the app on the bundled SYNTHETIC demo chat -> docs/img/. No API call.
+"""Four headless screenshots of the app on the bundled SYNTHETIC demo chat -> docs/img/. No API call.
 
 One Streamlit server (127.0.0.1, nice -n 10) for the whole run; three SEQUENTIAL browser sessions (Chromium --disable-gpu, one page, deviceScaleFactor 1), each
 closed before the next starts. The only moment a second Chromium exists is the app's own card render child, started when the stats card is rendered in
@@ -29,6 +29,23 @@ ROOT = Path(__file__).resolve().parents[1]
 PORT = 8599
 LIMIT_MB = 1433  # 1.4 GB: a ceiling for THIS dev-only script step only; the 1 GB rule in CLAUDE.md stays for everything else (see the docstring)
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(ROOT / ".cache" / "ms-playwright"))  # the browsers live inside the project
+
+
+def demo_ledger(directory: Path) -> str:
+    """A throw-away cost ledger with ONE fictional entry (US$0.05), so no screenshot shows, reads or writes the real ledger (.gcw_ledger.json)."""
+    import json
+
+    directory.mkdir(parents=True, exist_ok=True)
+    p = directory / "demo_ledger.json"
+    p.write_text(json.dumps({"entries": [{"label": "demo:fictional", "cost_usd": 0.05}]}), encoding="utf-8")
+    return str(p)
+
+
+def server_env(workdir: Path) -> dict[str, str]:
+    """Environment of the Streamlit server: the source tree on the path, no API key, and the demo ledger instead of the real one."""
+    env = dict(os.environ, PYTHONPATH=str(ROOT / "src"), GCW_LEDGER_PATH=demo_ledger(workdir))
+    env.pop("ANTHROPIC_API_KEY", None)
+    return env
 
 
 def tree() -> list[tuple[int, int, str]]:
@@ -101,7 +118,8 @@ def session(pw, fn, height: int = 1100) -> None:
             fn(page, page.locator('[data-testid="stSidebar"]'))
         except Exception:
             alerts = [t[:300] for t in page.locator('[data-testid="stAlert"]').all_inner_texts()]
-            print("page alerts at the failure:", alerts, "file inputs:", page.locator('input[type="file"]').count())
+            print("page alerts at the failure:", alerts, "file inputs:", page.locator('input[type="file"]').count(),
+                  "date segments:", [(x.get_attribute("aria-label"), x.inner_text()) for x in page.get_by_role("spinbutton").all()][:8])
             page.screenshot(path=str(ROOT / ".cache" / "tmp" / "fail.png"), full_page=True)
             raise
         ctx.close()
@@ -119,12 +137,18 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--report", required=True, help="a saved verified report (.report.json) of a real model run on the demo chat")
     ap.add_argument("--aliases", default=str(ROOT / "aliases.example.json"))
+    ap.add_argument("--until", default="2026-02-08", help="the window end of the saved run (YYYY-MM-DD); stats and AI items must cover the same window")
     ap.add_argument("--out-dir", default="docs/img")
     a = ap.parse_args(argv)
     out = ROOT / a.out_dir
     out.mkdir(parents=True, exist_ok=True)
-    env = dict(os.environ, PYTHONPATH=str(ROOT / "src"))
-    env.pop("ANTHROPIC_API_KEY", None)
+    import shutil
+
+    work = ROOT / ".cache" / "tmp" / f"shots_{os.getpid()}"
+    env = server_env(work)
+    report, runlog = work / "demo.report.json", work / "demo.json"  # short file names, so the page shows them without truncating
+    shutil.copyfile(a.report, report)
+    shutil.copyfile(a.report.replace(".report.json", ".json"), runlog)
     samp = Sampler()
     samp.start()
     samp.step = "server start"
@@ -142,8 +166,10 @@ def main(argv: list[str] | None = None) -> int:
                 side.get_by_text("3 Stats card").click()
                 samp.step = "1 stats card (browser + server + render child)"
                 page.get_by_role("button", name="Render stats card").click()
-                page.locator('[data-testid="stImage"] img').first.wait_for()
+                img = page.locator('[data-testid="stImage"] img').first
+                img.wait_for()
                 time.sleep(1)
+                assert img.bounding_box()["width"] >= 700, img.bounding_box()
                 page.screenshot(path=str(out / "app_1_stats_card.png"), full_page=True)
 
             def shot2(page, side):  # the payload preview before consent: checkbox unticked, Run disabled
@@ -164,23 +190,46 @@ def main(argv: list[str] | None = None) -> int:
                 page.get_by_text("Upload aliases.json").click()
                 page.locator('input[type="file"]').set_input_files(a.aliases)
                 page.get_by_text("members loaded").wait_for()
-                time.sleep(1)  # the window stays at its default: a saved report is re-verified by message id, so the run's own window end is not needed
+                # the stats must cover the same window as the saved run (it ends 2026-02-08): type the end date into the date field (year, month, day segments)
+                y, m, d = a.until.split("-")
+                segs = page.get_by_role("group", name="Until (inclusive)").get_by_role("spinbutton")
+                for i in range(segs.count()):  # the segment order follows the browser locale, so each segment is found by its own label
+                    label = (segs.nth(i).get_attribute("aria-label") or "").lower()
+                    value = y if "year" in label else m if "month" in label else d if "day" in label else None
+                    if value is not None:
+                        segs.nth(i).click()
+                        page.keyboard.type(value)
+                page.keyboard.press("Tab")  # the date field commits on blur, not on Enter
+                page.get_by_text("Date window").click()
+                time.sleep(1.5)
                 samp.step = "3 review (browser + server)"
                 side.get_by_text("5 Review").click()
                 page.get_by_text("Nothing to review yet").wait_for()  # let the step settle before the upload, or the widget is re-created and drops the file
-                page.locator('input[type="file"]').set_input_files(a.report)
-                page.get_by_text("Context around evidence 1").first.wait_for()  # the file name is truncated on screen
+                page.locator('input[type="file"]').first.set_input_files(str(report))
+                page.get_by_text("Context around evidence 1").first.wait_for()
+                page.locator('input[type="file"]').nth(1).set_input_files(str(runlog))  # the run log gives the original "proposed" count
+                page.get_by_text("demo.json").first.wait_for()
                 page.get_by_text("Review state").wait_for()
-                page.get_by_text("Context around evidence 1").first.click()  # show two messages before and after the first quote
                 for lab in page.get_by_text("approved", exact=True).all():
                     lab.click()
                 page.get_by_text("'approved': 12").wait_for()  # every decision is registered and the rerun is over
                 time.sleep(1.5)
                 page.evaluate("document.querySelector('[data-testid=\"stMain\"]').scrollTo(0, 0)")
                 time.sleep(0.5)
+                assert not page.get_by_text("Kai: Yay, love this.").is_visible()  # the context stays collapsed
                 page.screenshot(path=str(out / "app_3_review.png"), full_page=True)
+                # 4. render the card from the approved items: the app starts its own render child here (a second Chromium stack)
+                samp.step = "4 review render card (browser + server + render child)"
+                page.get_by_role("button", name="Render card").click()
+                page.get_by_text("Download card with AI items").wait_for()
+                img = page.locator('[data-testid="stImage"] img').first
+                img.wait_for()
+                img.scroll_into_view_if_needed()
+                time.sleep(1.5)
+                assert img.bounding_box()["width"] >= 700, img.bounding_box()
+                page.screenshot(path=str(out / "app_4_review_rendered_card.png"))
 
-            for n, (fn, height) in enumerate(((shot1, 1100), (shot2, 1500), (shot3, 1500)), 1):
+            for n, (fn, height) in enumerate(((shot1, 1400), (shot2, 1500), (shot3, 1700)), 1):
                 samp.step = f"{n} browser start"
                 session(pw, fn, height)
                 samp.step = f"{n} browser closed"
@@ -195,6 +244,7 @@ def main(argv: list[str] | None = None) -> int:
             server.wait(15)
         except subprocess.TimeoutExpired:
             server.kill()
+        shutil.rmtree(work, ignore_errors=True)
         samp.stop_flag = True
         samp.join(5)
     if samp.blown:

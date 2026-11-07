@@ -157,7 +157,7 @@ def step_card():
         except appcore.AppError as e:
             st.error(str(e))
     if S("png"):
-        st.image(S("png"), width=420)
+        st.image(S("png"), width=720)
         st.download_button("Download card (PNG)", S("png"), file_name="group_chat_wrapped_stats.png", mime="image/png", key="dl_stats")
 
 
@@ -233,10 +233,19 @@ def _source():
         return None
     df, view, since, until = w
     up = st.file_uploader("Or load a saved verified report (.report.json from analyze --save-response) for this chat and window", type=["json"], key="report_up")
+    lg = st.file_uploader("Optional: the matching run log (.json), so the card says how many items the model proposed", type=["json"], key="log_up")
     if up is None:
         return None
+    st.session_state["proposed"] = appcore.proposed_from_log(lg.getvalue()) if lg is not None else None
+    if lg is None:
+        st.caption("Without the run log, the card counts only the verified items as proposed (a saved report holds only verified items), and the window cannot be checked "
+                   "against the run: stats and AI items must cover the same window.")
     try:
         prep = analyze.prepare(df, S("aliases"), slice_start=since, slice_end=until)
+        covered = appcore.log_messages(lg.getvalue()) if lg is not None else None
+        if covered is not None and covered != len(prep["rows"]):
+            st.error(f"The run log covers {covered} messages but the window in Step 2 has {len(prep['rows'])}: stats and AI items must cover the same window. Set the window to match the run.")
+            return None
         report, stats = appcore.load_report_upload(up.getvalue(), prep["index"], set(prep["members"]))
     except (appcore.AppError, analyze.AnalysisError) as e:
         st.error(str(e))
@@ -287,14 +296,14 @@ def step_review():
     if st.button("Render card", key="render_review"):
         try:
             with st.spinner("Rendering"):
-                ai = appcore.zone_for(report, rv, index, mapping, S("aliases"), stats)
+                ai = appcore.zone_for(report, rv, index, mapping, S("aliases"), stats, proposed=None if S("ai_result") else S("proposed"))
                 html = appcore.card_html(df, S("aliases"), since, until, view["date_order"] if view["ambiguous"] else None, ai=ai)
                 st.session_state["review_png"] = appcore.render_png_bytes(html)
                 appcore.save_safe_review(rv, "app")
         except appcore.AppError as e:
             st.error(str(e))
     if S("review_png"):
-        st.image(S("review_png"), width=420)
+        st.image(S("review_png"), width=720)
         st.download_button("Download card with AI items (PNG)", S("review_png"), file_name="group_chat_wrapped_ai.png", mime="image/png", key="dl_ai")
 
 

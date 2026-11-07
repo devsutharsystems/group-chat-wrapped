@@ -14,6 +14,11 @@ from pathlib import Path
 from typing import Any
 
 LEDGER_PATH = str(Path(__file__).resolve().parents[2] / ".gcw_ledger.json")  # gitignored
+
+
+def default_ledger_path() -> str:
+    """The project ledger, or the file named by GCW_LEDGER_PATH (read at call time; used for demos and screenshots so the real ledger is neither read nor written)."""
+    return os.environ.get("GCW_LEDGER_PATH") or LEDGER_PATH
 THRESHOLD = 100_000
 
 PRICES: dict[str, dict[str, dict[str, float]]] = {
@@ -79,7 +84,7 @@ class CostGuard:
     def __init__(self, run_cap: float | None = None, proj_cap: float | None = None, ledger_path: str | None = None):
         self.run_cap = per_run_cap() if run_cap is None else run_cap
         self.proj_cap = project_cap() if proj_cap is None else proj_cap
-        self.ledger_path = Path(ledger_path or LEDGER_PATH)
+        self.ledger_path = Path(ledger_path or default_ledger_path())
         self.spent = 0.0
         self.reserved = 0.0
         self._lock = threading.Lock()
@@ -135,11 +140,11 @@ def _append(path: Path, entry: dict) -> None:
 
 
 def ledger_total(path: str | Path | None = None) -> float:
-    return sum(e.get("cost_usd", 0.0) for e in _read(Path(path or LEDGER_PATH)))
+    return sum(e.get("cost_usd", 0.0) for e in _read(Path(path or default_ledger_path())))
 
 
 def ledger_entries(path: str | Path | None = None) -> list[dict]:
-    return _read(Path(path or LEDGER_PATH))
+    return _read(Path(path or default_ledger_path()))
 
 
 def guard(estimate_usd: float, *, confirm: bool, guard_obj: CostGuard | None = None) -> float:

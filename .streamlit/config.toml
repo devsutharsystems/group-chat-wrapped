@@ -1,3 +1,8 @@
+[client]
+# https://docs.streamlit.io/develop/api-reference/configuration/config.toml : "viewer" hides the developer options (rerun, clear cache, deploy button) from the
+# toolbar and menu. This app is local-only and has its own step controls, so nothing the user needs is hidden; Deploy would contradict "no hosted endpoint".
+toolbarMode = "viewer"
+
 [browser]
 gatherUsageStats = false
 

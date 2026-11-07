@@ -249,6 +249,24 @@ def load_report_upload(data: bytes, index: dict, members: set[str]) -> tuple[dic
     return verified, stats
 
 
+def proposed_from_log(data: bytes) -> int | None:
+    """How many items the model proposed, from the run log (.json) that belongs to a saved report; None when the log has no such count. Logs hold counts only."""
+    try:
+        n = json.loads(data.decode("utf-8"))["stats"]["items_in"]
+    except (ValueError, UnicodeDecodeError, KeyError, TypeError):
+        return None
+    return int(n) if isinstance(n, int) and not isinstance(n, bool) and n >= 0 else None
+
+
+def log_messages(data: bytes) -> int | None:
+    """The message count the run covered, from its log; None when the log has none."""
+    try:
+        n = json.loads(data.decode("utf-8"))["messages"]
+    except (ValueError, UnicodeDecodeError, KeyError, TypeError):
+        return None
+    return n if isinstance(n, int) and not isinstance(n, bool) else None
+
+
 def item_ids(report: dict) -> list[tuple[str, str, dict]]:
     return [(review.item_id(t, it), t, it) for t in review.TYPES for it in report.get(t) or []]
 
@@ -282,8 +300,8 @@ def save_safe_review(rv: dict, run: str, out_dir: str | Path = OUT_DIR) -> Path:
     return p
 
 
-def zone_for(report: dict, rv: dict, index: dict, mapping: dict[str, str], aliases: privacy.Aliases | None, stats: dict) -> dict:
+def zone_for(report: dict, rv: dict, index: dict, mapping: dict[str, str], aliases: privacy.Aliases | None, stats: dict, synthetic: bool = False, proposed: int | None = None) -> dict:
     approved = review.apply(report, rv)
     zone = display.build_zone2(approved, index, names_for(mapping, aliases))
-    return {"zone2": zone, "approved": sum(len(approved[t]) for t in review.TYPES), "proposed": sum((stats.get("items_in_by_type") or {}).values()),
-            "verified": sum(len(report.get(t) or []) for t in review.TYPES), "synthetic": False}
+    return {"zone2": zone, "approved": sum(len(approved[t]) for t in review.TYPES), "proposed": proposed if proposed is not None else sum((stats.get("items_in_by_type") or {}).values()),
+            "verified": sum(len(report.get(t) or []) for t in review.TYPES), "synthetic": synthetic}
