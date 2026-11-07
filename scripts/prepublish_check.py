@@ -138,7 +138,7 @@ def blob_history(root: Path) -> tuple[bool, str]:
 
 
 MENTION = re.compile(r"Prateek|\bmentor\b|\bLDS\b|Let'?s Data Science|\$5\b|key limit|devsuthar|Dev-Suthar", re.I)
-MENTION_SKIP = {"scripts/prepublish_check.py", "tests/test_phase7b.py"}  # these files define the patterns
+MENTION_SKIP = {"scripts/prepublish_check.py", "tests/test_phase7b.py", "tests/test_phase7c.py"}  # these files define the patterns
 
 
 def mentions(root: Path) -> list[str]:

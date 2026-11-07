@@ -169,6 +169,6 @@ def test_the_publish_checklist_names_the_real_blocking_checks_in_order():
     names = {n for n, _ in pp.CHECKS}
     for blocker in ("precision_A.json exists", "commit_map.md exists", "history: no build artefacts", "history: no blob over 1 MB"):
         assert blocker in names and f"`{blocker}`" in t
-    order = [t.index(k) for k in ("1. **Ratings", "2. **README tables", "3. **History rewrite", "4. **Pre-publish", "5. **Private push", "6. **CI green", "7. **Public flip", "8. **Pages")]
+    order = [t.index(k) for k in ("1. **Ratings", "2. **Precision", "3. **README tables", "4. **History rewrite", "5. **Update stale", "6. **Pre-publish", "7. **Private push", "8. **CI green", "9. **Public flip", "10. **Pages")]
     assert order == sorted(order)
     assert "NOT run" in t and "--private" in t and "git push -u origin main" in t

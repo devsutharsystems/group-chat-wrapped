@@ -1,6 +1,6 @@
 # Group Chat Wrapped: PRD (Phase 0)
 
-> **Spec note.** Prateek's spec is truncated at "…". It reads: "Spotify Wrapped for your WhatsApp group: top talkers, running jokes, moments of the year, as a shareable card… Haiku reads up to 1 million tokens… Python, pandas, Haiku. Cost: well under a dollar." This PRD builds to R1–R7 exactly as written below. Anything the cut-off text may have said is **not** assumed.
+> **Spec note.** the project brief's spec is truncated at "…". It reads: "Spotify Wrapped for your WhatsApp group: top talkers, running jokes, moments of the year, as a shareable card… Haiku reads up to 1 million tokens… Python, pandas, Haiku. Cost: well under a dollar." This PRD builds to R1–R7 exactly as written below. Anything the cut-off text may have said is **not** assumed.
 
 Model: `claude-haiku-5-5` (1M context, 128K max output). See `docs/api-notes.md`.
 
