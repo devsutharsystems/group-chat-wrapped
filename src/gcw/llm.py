@@ -45,7 +45,7 @@ def key_status() -> tuple[bool, int]:
     return bool(k), len(k)
 
 
-def get_client() -> Any:
+def get_client(max_retries: int | None = None) -> Any:
     if os.environ.get("GCW_TEST_NO_NETWORK"):  # set by tests/conftest.py for the whole test session and its subprocesses
         raise RuntimeError("REAL API ACCESS BLOCKED IN TESTS (GCW_TEST_NO_NETWORK is set)")
     load_env()
@@ -53,7 +53,7 @@ def get_client() -> Any:
         raise RuntimeError("ANTHROPIC_API_KEY is not set (create .env in the project root)")
     import anthropic
 
-    return anthropic.Anthropic()
+    return anthropic.Anthropic() if max_retries is None else anthropic.Anthropic(max_retries=max_retries)  # 0: the SDK does not retry on its own
 
 
 def _usage_dict(usage: Any) -> dict:

@@ -54,3 +54,51 @@ def is_frozen_chat(path: str | Path) -> bool:
     except (OSError, DatasetError):
         return False
     return True
+
+
+# ------------------------------------------------------------------ the large frozen dataset (Phase 5a): its own directory, hashes and verify function
+LARGE_DIR = ROOT / "synthetic" / "frozen_large"
+LARGE_CHAT_FILE = "chat_synthetic_large.txt"
+LARGE_GROUND_TRUTH_FILE = "ground_truth.json"
+# Filled in when the dataset is frozen (scripts/freeze_large.py prints them). None = not frozen yet: every check fails closed.
+LARGE_CHAT_SHA256: str | None = None
+LARGE_GROUND_TRUTH_SHA256: str | None = None
+
+
+def verify_large_dataset(directory: str | Path | None = None, *, chat_sha256: str | None = None, ground_truth_sha256: str | None = None) -> dict[str, str]:
+    """Like verify_dataset, for synthetic/frozen_large/. The keyword overrides exist only for tests. Fails if the constants are not set yet."""
+    chat_sha256 = chat_sha256 or LARGE_CHAT_SHA256
+    ground_truth_sha256 = ground_truth_sha256 or LARGE_GROUND_TRUTH_SHA256
+    if not chat_sha256 or not ground_truth_sha256:
+        raise DatasetError("LARGE DATASET NOT FROZEN: the hash constants in gcw/dataset.py are not set")
+    d = Path(directory) if directory else LARGE_DIR
+    problems = []
+    for name, want in ((LARGE_CHAT_FILE, chat_sha256), (LARGE_GROUND_TRUTH_FILE, ground_truth_sha256)):
+        f = d / name
+        if not f.exists():
+            problems.append(f"{name} is missing")
+        elif sha256_file(f) != want:
+            problems.append(f"{name} sha256 differs from the frozen constant")
+    if problems:
+        raise DatasetError("LARGE DATASET NOT FROZEN VERSION: " + "; ".join(problems))
+    return {LARGE_CHAT_FILE: chat_sha256, LARGE_GROUND_TRUTH_FILE: ground_truth_sha256}
+
+
+def is_frozen_large_chat(path: str | Path) -> bool:
+    p = Path(path)
+    try:
+        if not LARGE_CHAT_SHA256 or not p.is_file() or sha256_file(p) != LARGE_CHAT_SHA256:
+            return False
+        verify_large_dataset()
+    except (OSError, DatasetError):
+        return False
+    return True
+
+
+def which_frozen(path: str | Path) -> str | None:
+    """'original', 'large' or None: which frozen synthetic dataset (hashes and files verified) the chat file is."""
+    if is_frozen_chat(path):
+        return "original"
+    if is_frozen_large_chat(path):
+        return "large"
+    return None

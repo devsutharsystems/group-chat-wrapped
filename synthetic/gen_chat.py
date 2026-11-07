@@ -37,6 +37,7 @@ LAST_SEC = 86340  # latest second of the day a burst may end (23:59)
 CFG_PATH = Path(__file__).resolve().parent / "config.json"
 OUT_DIR = ROOT / "data" / "synthetic"
 CACHE_DIR = OUT_DIR / "cache"
+LABEL_PREFIX = "gen"  # ledger label prefix; the large dataset uses its own (genL) so its budget is counted separately
 LOG_PATH = ROOT / "out" / "gen.log"
 LEN_WORDS = {"short": "2-6 words", "medium": "7-14 words", "long": "15-30 words"}
 ENCRYPTION = "Messages and calls are end-to-end encrypted. Only people in this chat can read, listen to, or share them. *Learn more*"
@@ -276,7 +277,7 @@ class BatchSpec:
 
     @property
     def label(self) -> str:
-        return f"gen:b{self.burst_id}p{self.part}"
+        return f"{LABEL_PREFIX}:b{self.burst_id}p{self.part}"
 
     def prompt(self) -> str:
         lines = "\n".join(f"{i}. {s} ({h}: {LEN_WORDS[h]})" for i, (s, h) in enumerate(self.speakers, 1))
@@ -517,7 +518,7 @@ def collect(specs: list[BatchSpec], filler: Callable[[BatchSpec], list[str]], wo
     return fills, failures
 
 
-def estimate(cfg: dict, mini: bool, *, client: Any = None) -> dict:
+def estimate(cfg: dict, mini: bool, *, client: Any = None, cache_dir: Path | None = None) -> dict:
     """Exact input via count_tokens WITH output_config (needs a client); output scaled from cached real batches."""
     from gcw import cost, llm
 
@@ -531,7 +532,8 @@ def estimate(cfg: dict, mini: bool, *, client: Any = None) -> dict:
     n_msgs = sum(s.n for s in specs) + len(sk.planted)
     out = {"n_batches": len(specs), "n_bursts": len(sk.bursts), "approx_messages": n_msgs, "input_tokens_total": sum(ins), "input_exact": bool(client), "max_input_per_call": max(ins),
            "worst_case_usd": round(sum(cost.estimate_usd(i, max_tokens_for(cfg, s.n, 0)) for i, s in zip(ins, specs)), 4)}
-    cached = [json.loads(f.read_text()) for f in CACHE_DIR.glob("*.json")] if CACHE_DIR.exists() else []
+    cdir = cache_dir or CACHE_DIR  # real batches whose output size is used to scale the estimate (the large dataset has none of its own yet)
+    cached = [json.loads(f.read_text()) for f in cdir.glob("*.json")] if cdir.exists() else []
     cached = [c for c in cached if (c["usage"].get("output_tokens_details") or {}).get("thinking_tokens", 0) == 0]
     if cached:
         n_tot = sum(len(c["texts"]) for c in cached)
@@ -550,6 +552,15 @@ def estimate(cfg: dict, mini: bool, *, client: Any = None) -> dict:
     return out
 
 
+def run_cap(cap: float, phase_budget: float | None, prefix: str, entries: list[dict], ledger_total: float) -> float:
+    """USD cap of one generation run. With a phase budget (a dataset with its own label prefix): the budget minus what entries with that prefix already
+    spent. Without one: the original rule, 0.60 minus the whole ledger."""
+    if phase_budget is not None:
+        spent = sum(e.get("cost_usd", 0.0) for e in entries if str(e.get("label", "")).startswith(prefix + ":"))
+        return min(cap, max(0.0, phase_budget - spent))
+    return min(cap, max(0.0, 0.60 - ledger_total))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--mini", action="store_true")
@@ -559,8 +570,19 @@ def main() -> int:
     ap.add_argument("--sample", type=int, default=0, help="write first N lines to synthetic/sample_<N>.txt")
     ap.add_argument("--seed", type=int, default=None)
     ap.add_argument("--cap", type=float, default=None, help="per-run USD cap (default GCW_COST_CAP_USD)")
+    ap.add_argument("--config", default=None, help="config JSON (default synthetic/config.json)")
+    ap.add_argument("--out-dir", default=None, help="output and cache directory (default data/synthetic)")
+    ap.add_argument("--label-prefix", default=None, help="ledger label prefix (default gen)")
+    ap.add_argument("--phase-budget", type=float, default=None, help="USD budget for this dataset: the run cap is this minus what ledger entries with the label prefix already spent")
+    ap.add_argument("--estimate-cache", default=None, help="cache dir of real batches used to scale the output-token estimate (default: this run's cache)")
     a = ap.parse_args()
-    cfg = load_config()
+    global OUT_DIR, CACHE_DIR, LABEL_PREFIX
+    if a.out_dir:
+        OUT_DIR = Path(a.out_dir)
+        CACHE_DIR = OUT_DIR / "cache"
+    if a.label_prefix:
+        LABEL_PREFIX = a.label_prefix
+    cfg = load_config(Path(a.config) if a.config else CFG_PATH)
     log = make_logger()
     from gcw import cost, llm
 
@@ -571,7 +593,7 @@ def main() -> int:
                 client = llm.get_client()
             except RuntimeError as e:
                 print(f"no client ({e}); using local token estimate")
-        print(json.dumps(estimate(cfg, a.mini, client=client), indent=1))
+        print(json.dumps(estimate(cfg, a.mini, client=client, cache_dir=Path(a.estimate_cache) if a.estimate_cache else None), indent=1))
         print(f"ledger so far ${cost.ledger_total():.5f}")
         return 0
 
@@ -589,9 +611,9 @@ def main() -> int:
         if spike.exists():
             thinking = ((json.loads(spike.read_text()).get("usage") or {}).get("output_tokens_details") or {}).get("thinking_tokens")
         cap = a.cap if a.cap is not None else cost.per_run_cap()
-        cap = min(cap, max(0.0, 0.60 - cost.ledger_total()))
+        cap = run_cap(cap, a.phase_budget, LABEL_PREFIX, cost.ledger_entries(), cost.ledger_total())
         guard = cost.CostGuard(run_cap=cap)
-        filler = ApiFiller(cfg, guard, confirm=True, thinking=thinking, log=log, client=llm.get_client())
+        filler = ApiFiller(cfg, guard, confirm=True, thinking=thinking, log=log, client=llm.get_client(), cache_dir=CACHE_DIR)
         log(f"start {'mini' if a.mini else 'full'}: {len(specs)} batches, run cap ${cap:.3f}, thinking_tokens basis {thinking}")
     fills, failures = collect(specs, filler, 4, log)
     if failures:

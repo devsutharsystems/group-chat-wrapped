@@ -1,0 +1,442 @@
+{
+ "chunked_losses": {
+  "misses": [
+   {
+    "lost_at": "the caps",
+    "never_proposed": false,
+    "pipeline_induced": true,
+    "planted": "m1",
+    "present_in_final_but_not_strict": false,
+    "run": "20261107T114953275-A-chunked",
+    "stages": {
+     "after_caps": {
+      "items": 0,
+      "planted_evidence_messages": 0,
+      "present": false
+     },
+     "after_merge": {
+      "items": 1,
+      "planted_evidence_messages": 1,
+      "present": true
+     },
+     "after_rules": {
+      "items": 1,
+      "planted_evidence_messages": 1,
+      "present": true
+     },
+     "raw_candidates": {
+      "items": 1,
+      "planted_evidence_messages": 1,
+      "present": true
+     }
+    },
+    "type": "moments"
+   },
+   {
+    "lost_at": "the caps",
+    "never_proposed": false,
+    "pipeline_induced": true,
+    "planted": "m3",
+    "present_in_final_but_not_strict": false,
+    "run": "20261107T114953275-A-chunked",
+    "stages": {
+     "after_caps": {
+      "items": 0,
+      "planted_evidence_messages": 0,
+      "present": false
+     },
+     "after_merge": {
+      "items": 1,
+      "planted_evidence_messages": 1,
+      "present": true
+     },
+     "after_rules": {
+      "items": 1,
+      "planted_evidence_messages": 1,
+      "present": true
+     },
+     "raw_candidates": {
+      "items": 1,
+      "planted_evidence_messages": 1,
+      "present": true
+     }
+    },
+    "type": "moments"
+   },
+   {
+    "lost_at": null,
+    "never_proposed": true,
+    "pipeline_induced": false,
+    "planted": "m3",
+    "present_in_final_but_not_strict": false,
+    "run": "20261107T115025921-A-chunked",
+    "stages": {
+     "after_caps": {
+      "items": 0,
+      "planted_evidence_messages": 0,
+      "present": false
+     },
+     "after_merge": {
+      "items": 0,
+      "planted_evidence_messages": 0,
+      "present": false
+     },
+     "after_rules": {
+      "items": 0,
+      "planted_evidence_messages": 0,
+      "present": false
+     },
+     "raw_candidates": {
+      "items": 0,
+      "planted_evidence_messages": 0,
+      "present": false
+     }
+    },
+    "type": "moments"
+   }
+  ],
+  "n_misses": 3,
+  "never_proposed": 1,
+  "pipeline_induced": 2,
+  "replay_matches_saved_final": [
+   true,
+   true,
+   true
+  ],
+  "schema": 1
+ },
+ "eval_full_A_mode_change": {
+  "fields_that_differ": [
+   "mode"
+  ],
+  "identical_except_mode": true
+ },
+ "jokes_per_chunk": {
+  "chunk_bounds": [
+   [
+    "2025-11-08",
+    "2026-02-21"
+   ],
+   [
+    "2026-02-22",
+    "2026-06-25"
+   ],
+   [
+    "2026-06-26",
+    "2026-10-14"
+   ],
+   [
+    "2026-10-15",
+    "2026-11-03"
+   ]
+  ],
+  "jL_chunks_meeting_rule_alone": 3,
+  "jokes": {
+   "j1": {
+    "chunks_meeting_rule_alone": 1,
+    "per_chunk": [
+     {
+      "distinct_dates": 4,
+      "meets_joke_rule_alone": true,
+      "occurrences": 7
+     },
+     {
+      "distinct_dates": 0,
+      "meets_joke_rule_alone": false,
+      "occurrences": 0
+     },
+     {
+      "distinct_dates": 0,
+      "meets_joke_rule_alone": false,
+      "occurrences": 0
+     },
+     {
+      "distinct_dates": 0,
+      "meets_joke_rule_alone": false,
+      "occurrences": 0
+     }
+    ],
+    "total_dates": 4,
+    "total_occurrences": 7
+   },
+   "j2": {
+    "chunks_meeting_rule_alone": 1,
+    "per_chunk": [
+     {
+      "distinct_dates": 4,
+      "meets_joke_rule_alone": true,
+      "occurrences": 7
+     },
+     {
+      "distinct_dates": 0,
+      "meets_joke_rule_alone": false,
+      "occurrences": 0
+     },
+     {
+      "distinct_dates": 0,
+      "meets_joke_rule_alone": false,
+      "occurrences": 0
+     },
+     {
+      "distinct_dates": 0,
+      "meets_joke_rule_alone": false,
+      "occurrences": 0
+     }
+    ],
+    "total_dates": 4,
+    "total_occurrences": 7
+   },
+   "j3": {
+    "chunks_meeting_rule_alone": 1,
+    "per_chunk": [
+     {
+      "distinct_dates": 0,
+      "meets_joke_rule_alone": false,
+      "occurrences": 0
+     },
+     {
+      "distinct_dates": 3,
+      "meets_joke_rule_alone": true,
+      "occurrences": 6
+     },
+     {
+      "distinct_dates": 1,
+      "meets_joke_rule_alone": false,
+      "occurrences": 1
+     },
+     {
+      "distinct_dates": 0,
+      "meets_joke_rule_alone": false,
+      "occurrences": 0
+     }
+    ],
+    "total_dates": 4,
+    "total_occurrences": 7
+   },
+   "j4": {
+    "chunks_meeting_rule_alone": 1,
+    "per_chunk": [
+     {
+      "distinct_dates": 0,
+      "meets_joke_rule_alone": false,
+      "occurrences": 0
+     },
+     {
+      "distinct_dates": 3,
+      "meets_joke_rule_alone": true,
+      "occurrences": 5
+     },
+     {
+      "distinct_dates": 1,
+      "meets_joke_rule_alone": false,
+      "occurrences": 2
+     },
+     {
+      "distinct_dates": 0,
+      "meets_joke_rule_alone": false,
+      "occurrences": 0
+     }
+    ],
+    "total_dates": 4,
+    "total_occurrences": 7
+   },
+   "j5": {
+    "chunks_meeting_rule_alone": 1,
+    "per_chunk": [
+     {
+      "distinct_dates": 0,
+      "meets_joke_rule_alone": false,
+      "occurrences": 0
+     },
+     {
+      "distinct_dates": 0,
+      "meets_joke_rule_alone": false,
+      "occurrences": 0
+     },
+     {
+      "distinct_dates": 3,
+      "meets_joke_rule_alone": true,
+      "occurrences": 5
+     },
+     {
+      "distinct_dates": 1,
+      "meets_joke_rule_alone": false,
+      "occurrences": 2
+     }
+    ],
+    "total_dates": 4,
+    "total_occurrences": 7
+   },
+   "j6": {
+    "chunks_meeting_rule_alone": 1,
+    "per_chunk": [
+     {
+      "distinct_dates": 0,
+      "meets_joke_rule_alone": false,
+      "occurrences": 0
+     },
+     {
+      "distinct_dates": 0,
+      "meets_joke_rule_alone": false,
+      "occurrences": 0
+     },
+     {
+      "distinct_dates": 3,
+      "meets_joke_rule_alone": true,
+      "occurrences": 5
+     },
+     {
+      "distinct_dates": 1,
+      "meets_joke_rule_alone": false,
+      "occurrences": 2
+     }
+    ],
+    "total_dates": 4,
+    "total_occurrences": 7
+   },
+   "jL": {
+    "chunks_meeting_rule_alone": 3,
+    "per_chunk": [
+     {
+      "distinct_dates": 3,
+      "meets_joke_rule_alone": true,
+      "occurrences": 4
+     },
+     {
+      "distinct_dates": 2,
+      "meets_joke_rule_alone": true,
+      "occurrences": 3
+     },
+     {
+      "distinct_dates": 3,
+      "meets_joke_rule_alone": true,
+      "occurrences": 4
+     },
+     {
+      "distinct_dates": 1,
+      "meets_joke_rule_alone": false,
+      "occurrences": 1
+     }
+    ],
+    "total_dates": 9,
+    "total_occurrences": 12
+   }
+  }
+ },
+ "test_counts": {
+  "before_total": 541,
+  "files": {
+   "tests/test_analyze.py": {
+    "before": 32,
+    "delta": 0,
+    "now": 32
+   },
+   "tests/test_card.py": {
+    "before": 31,
+    "delta": 0,
+    "now": 31
+   },
+   "tests/test_card_ai.py": {
+    "before": 27,
+    "delta": 0,
+    "now": 27
+   },
+   "tests/test_chunked.py": {
+    "before": 0,
+    "delta": 107,
+    "now": 107
+   },
+   "tests/test_cost.py": {
+    "before": 8,
+    "delta": 0,
+    "now": 8
+   },
+   "tests/test_dataset.py": {
+    "before": 8,
+    "delta": 0,
+    "now": 8
+   },
+   "tests/test_display.py": {
+    "before": 35,
+    "delta": 0,
+    "now": 35
+   },
+   "tests/test_evaluate.py": {
+    "before": 18,
+    "delta": 0,
+    "now": 18
+   },
+   "tests/test_gen_chat.py": {
+    "before": 28,
+    "delta": 0,
+    "now": 28
+   },
+   "tests/test_llm.py": {
+    "before": 7,
+    "delta": 0,
+    "now": 7
+   },
+   "tests/test_no_real_client.py": {
+    "before": 6,
+    "delta": 0,
+    "now": 6
+   },
+   "tests/test_parser.py": {
+    "before": 26,
+    "delta": 0,
+    "now": 26
+   },
+   "tests/test_phase4a.py": {
+    "before": 20,
+    "delta": 0,
+    "now": 20
+   },
+   "tests/test_privacy.py": {
+    "before": 93,
+    "delta": 0,
+    "now": 93
+   },
+   "tests/test_rating.py": {
+    "before": 17,
+    "delta": 0,
+    "now": 17
+   },
+   "tests/test_rating_tool.py": {
+    "before": 8,
+    "delta": 0,
+    "now": 8
+   },
+   "tests/test_review.py": {
+    "before": 18,
+    "delta": 0,
+    "now": 18
+   },
+   "tests/test_scan_repo.py": {
+    "before": 24,
+    "delta": 0,
+    "now": 24
+   },
+   "tests/test_smoke.py": {
+    "before": 9,
+    "delta": 0,
+    "now": 9
+   },
+   "tests/test_stats.py": {
+    "before": 79,
+    "delta": 0,
+    "now": 79
+   },
+   "tests/test_textnorm.py": {
+    "before": 14,
+    "delta": 0,
+    "now": 14
+   },
+   "tests/test_verify.py": {
+    "before": 33,
+    "delta": 0,
+    "now": 33
+   }
+  },
+  "now_total": 648
+ }
+}

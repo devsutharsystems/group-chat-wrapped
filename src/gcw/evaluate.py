@@ -200,7 +200,8 @@ def _lengths(texts: list[str], le: int) -> dict:
     return {"n": len(ls), "min": ls[0], "median": statistics.median(ls), "max": ls[-1], f"share_le_{le}": sum(1 for x in ls if x <= le) / len(ls)}
 
 
-def planted_groups(truth_items: list[dict], first_day: _date, last_day: _date) -> dict[str, dict]:
+def planted_groups(truth_items: list[dict], first_day: _date, last_day: _date, names: tuple[str, str, str] = ("first", "middle", "last"),
+                   dev_end: str | None = "2026-02-08") -> dict[str, dict]:
     """planted id -> {type, span (first and last occurrence dates), group, split}. group: the third of the chat (by date) holding the MIDPOINT of the
     item's own date span ('first' / 'middle' / 'last'); the long-range joke jL is reported on its own ('long-range'). split: dev or held-out."""
     spans: dict[str, list] = {}
@@ -212,25 +213,27 @@ def planted_groups(truth_items: list[dict], first_day: _date, last_day: _date) -
         spans.setdefault(it["id"], []).append(pd.Timestamp(it["timestamp"]).date())
         kinds[it["id"]] = typ
     total = (last_day - first_day).days or 1
-    split = dev_held_out(truth_items, "2025-11-01", "2026-02-08")
+    split = dev_held_out(truth_items, "2025-11-01", dev_end) if dev_end else None  # dev/held-out only means something for the original dataset
     out = {}
     for tid, days in sorted(spans.items()):
         lo, hi = min(days), max(days)
         mid = lo + (hi - lo) / 2
         frac = (mid - first_day).days / total
-        group = "long-range" if tid == "jL" else "first" if frac < 1 / 3 else "middle" if frac < 2 / 3 else "last"
-        out[tid] = {"type": kinds[tid], "span": [lo.isoformat(), hi.isoformat()], "group": group, "split": split[tid]["status"]}
+        group = "long-range" if tid == "jL" else names[0] if frac < 1 / 3 else names[1] if frac < 2 / 3 else names[2]
+        out[tid] = {"type": kinds[tid], "span": [lo.isoformat(), hi.isoformat()], "group": group, "split": split[tid]["status"] if split else "new-dataset"}
     return out
 
 
-def evaluate_runs(df: pd.DataFrame, aliases: privacy.Aliases | None, runs: list[tuple], truth_items: list[dict], mode: str = "single") -> dict:
+def evaluate_runs(df: pd.DataFrame, aliases: privacy.Aliases | None, runs: list[tuple], truth_items: list[dict], mode: str = "single", dataset: str = "original") -> dict:
     """runs: [(name, log, raw report)] for single-pass, or [(name, log, final verified report, raw map responses)] for mode='chunked' (the evidence statistics
     then come from the map calls, each classified against its own chunk). Returns the result dict (counts, rates and planted ids only: NO titles, summaries,
     quotes or message text)."""
     prep = analyze.prepare(df, aliases, slice_start=None, slice_end=None)
     index = prep["index"]
     ts = [r["ts"] for r in prep["rows"]]
-    groups = planted_groups(truth_items, min(ts).date(), max(ts).date())
+    large = dataset == "large"
+    gnames = ("start", "middle", "end") if large else ("first", "middle", "last")
+    groups = planted_groups(truth_items, min(ts).date(), max(ts).date(), gnames, None if large else "2026-02-08")
     per_run: list[dict] = []
     lens: dict[str, dict[str, list[str]]] = {t: {"title": [], "summary": []} for t in SIZE_TYPES}
     found = {t: {"strict": 0, "lenient": 0, "by_date": 0} for t in groups}
@@ -292,13 +295,13 @@ def evaluate_runs(df: pd.DataFrame, aliases: privacy.Aliases | None, runs: list[
                           "lenient_recall": (sum(planted[t]["found_lenient_runs"] for t in ids) / possible) if possible else None}
         return res
 
-    by_third = agg({g: [t for t, v in planted.items() if v["group"] == g] for g in ("first", "middle", "last", "long-range")})
-    by_split = agg({s: [t for t, v in planted.items() if v["split"] == s] for s in ("dev", "held-out")})
+    by_third = agg({g: [t for t, v in planted.items() if v["group"] == g] for g in (*gnames, "long-range")})
+    by_split = agg({s: [t for t, v in planted.items() if v["split"] == s] for s in (("new-dataset",) if large else ("dev", "held-out"))})
     by_type = agg({typ: [t for t, v in planted.items() if v["type"] == typ] for typ in ("running_jokes", "moments")})
     moments = [t for t, v in planted.items() if v["type"] == "moments" and v["in_scope"]]
     by_date_total = sum(planted[t]["found_by_date_runs"] for t in moments)
     return {
-        "schema": 1, "mode": mode, "phase": runs[0][1].get("phase") if runs else None, "config": runs[0][1].get("config") if runs else None, "n_runs": n, "messages": len(prep["rows"]),
+        "schema": 1, "mode": mode, "dataset": dataset, "phase": runs[0][1].get("phase") if runs else None, "config": runs[0][1].get("config") if runs else None, "n_runs": n, "messages": len(prep["rows"]),
         "runs": per_run,
         "summary": {
             "rule_compliant_rate": _stat([r["rule_compliant_rate"] for r in per_run]), "grounding_rate": _stat([r["grounding_rate"] for r in per_run]),
@@ -702,3 +705,67 @@ def compare_modes(single: dict, chunked: dict, commit: str = "") -> str:
     low = md.lower()
     assert not any(w in low for w in WINNER_WORDS), "ranking language in the comparison"
     return md
+
+
+# ------------------------------------------------------------------ Phase 5a: where were planted items lost in the chunked pipeline? (ids and counts only)
+def replay_chunked(all_rows: list[dict], index: dict, log: dict, raw: dict, members: set[str]) -> dict:
+    """Rebuild every stage of a saved chunked run from its raw map and reduce responses and the logged chunk boundaries (deterministic, offline):
+    raw candidates, merged items, after the item rules, after the caps. Returns the stage reports; `final` should equal the saved final report."""
+    from gcw import chunked
+
+    cands: list[dict] = []
+    for k, ch in enumerate(log["chunks"]):
+        sel = [r for r in all_rows if ch["start"] <= r["ts"].date().isoformat() <= ch["end"]]
+        found, _ = verify.verify_candidates(json.loads(raw["map"][k]), verify.make_index(sel))
+        for c in found:
+            cands.append({"id": f"c{len(cands) + 1:03d}", "type": c["type"], "chunk": k + 1, "item": c["item"]})
+    groups = json.loads(raw["reduce"])["groups"] if raw.get("reduce") else []
+    merged, _ = chunked.merge_candidates(cands, groups) if cands else ({t: [] for t in verify.TYPES}, {})
+    ruled, _ = verify.apply_item_rules(merged, index, valid_members=members)
+    final, _ = verify.rank_and_cap(ruled, index)
+    as_report = lambda cs: {t: [c["item"] for c in cs if c["type"] == t] for t in verify.TYPES}  # noqa: E731
+    return {"candidates": as_report(cands), "merged": merged, "ruled": ruled, "final": final}
+
+
+def diagnose_chunked(df: pd.DataFrame, aliases: privacy.Aliases | None, runs: list[tuple], truth_items: list[dict]) -> dict:
+    """runs: [(name, log, final report, raw {map, reduce})]. For every strict miss of a planted item in a chunked run: was evidence on a planted occurrence of
+    that item present among the raw candidates, after the merge, after the item rules, after the caps (the final report)? Pipeline-induced = present at some
+    stage but not credited in the final report; never proposed = absent at every stage."""
+    prep = analyze.prepare(df, aliases, slice_start=None, slice_end=None)
+    index, rows = prep["index"], prep["rows"]
+    members = set(prep["members"])
+    occ = verify.planted_occurrences(truth_items, index, prep["mapping"])
+    ts = [r["ts"] for r in rows]
+    out, replay_ok = [], []
+    for name, log, final_saved, raw in runs:
+        st = replay_chunked(rows, index, log, raw, members)
+        replay_ok.append(json.loads(json.dumps(st["final"])) == json.loads(json.dumps(final_saved)))
+        score = verify.match_planted(final_saved, index, truth_items, prep["mapping"], slice_start=min(ts), slice_end=max(ts))
+        for typ in ("running_jokes", "moments"):
+            for tid in score[typ]["planted_in_slice"]:
+                if tid in score[typ]["found_strict"]:
+                    continue
+                pids = {p for p, _ in occ[tid]["occurrences"]}
+                stages = {}
+                for stage, rep in (("raw_candidates", st["candidates"]), ("after_merge", st["merged"]), ("after_rules", st["ruled"]), ("after_caps", st["final"])):
+                    hit = [it for it in rep.get(typ, []) if pids & {e["message_id"] for e in it["evidence"]}]
+                    stages[stage] = {"present": bool(hit), "items": len(hit), "planted_evidence_messages": len({e["message_id"] for it in hit for e in it["evidence"]} & pids)}
+                present_anywhere = any(v["present"] for v in stages.values())
+                lost_at = next((step for s, nxt, step in (("raw_candidates", "after_merge", "the merge"), ("after_merge", "after_rules", "the item rules"), ("after_rules", "after_caps", "the caps"))
+                               if stages[s]["present"] and not stages[nxt]["present"]), None)
+                out.append({"run": name, "planted": tid, "type": typ, "stages": stages, "never_proposed": not present_anywhere,
+                            "pipeline_induced": present_anywhere, "lost_at": lost_at, "present_in_final_but_not_strict": stages["after_caps"]["present"]})
+    return {"schema": 1, "replay_matches_saved_final": replay_ok, "misses": out, "n_misses": len(out),
+            "pipeline_induced": sum(m["pipeline_induced"] for m in out), "never_proposed": sum(m["never_proposed"] for m in out)}
+
+
+def render_chunked_diagnostic(d: dict) -> str:
+    L = ["# Where planted items were lost in the chunked runs (numbers only)", "",
+         f"Strict misses: {d['n_misses']}. Pipeline-induced (evidence on a planted occurrence existed at some stage but the final report does not credit the item): {d['pipeline_induced']}. "
+         f"Never proposed (no evidence on a planted occurrence at any stage): {d['never_proposed']}. The replay of every run matched its saved final report: {all(d['replay_matches_saved_final'])}.", "",
+         "| run | planted | raw candidates | after merge | after item rules | after caps | lost at |", "|---|---|---|---|---|---|---|"]
+    for m in d["misses"]:
+        s = m["stages"]
+        cell = lambda k: f"{'yes' if s[k]['present'] else 'no'} ({s[k]['items']} items; {s[k]['planted_evidence_messages']} planted messages)"  # noqa: E731
+        L.append(f"| {m['run']} | {m['planted']} | {cell('raw_candidates')} | {cell('after_merge')} | {cell('after_rules')} | {cell('after_caps')} | {m['lost_at'] or ('not lost: never proposed' if m['never_proposed'] else 'present in the final report, not credited')} |")
+    return "\n".join(L) + "\n"

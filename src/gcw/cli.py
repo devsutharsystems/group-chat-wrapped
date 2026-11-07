@@ -45,7 +45,8 @@ def build_parser() -> argparse.ArgumentParser:
     an.add_argument("--workers", type=int, default=4, help="parallel map calls in chunked mode (at most 4)")
     an.add_argument("--max-input-tokens", type=int, default=95_000, help="refuse a request with more input tokens than this (default 95000)")
     an.add_argument("--max-run-cost", type=float, help="refuse if the worst-case cost estimate of one run is above this many USD")
-    an.add_argument("--require-frozen-dataset", action="store_true", help="verify_dataset() and the chat must be the frozen synthetic chat, checked first")
+    an.add_argument("--require-frozen-dataset", action="store_true", help="the chat must be a frozen synthetic chat (the original or the large one), each verified by its own function, checked first")
+    an.add_argument("--no-retry", action="store_true", help="the API client never retries on its own (a 429 or a size error is reported once, verbatim)")
     an.add_argument("--expect-prompt-version", metavar="PREFIX..SUFFIX", help="abort unless PROMPT_VERSION starts with PREFIX and ends with SUFFIX (it is always printed)")
     an.add_argument("--truth", help="ground_truth.json of a synthetic chat: score found planted items")
     an.add_argument("--label", default="slice", help="label suffix for the ledger entry")
@@ -72,6 +73,7 @@ def build_parser() -> argparse.ArgumentParser:
         ev.add_argument("--config", default="A")
         ev.add_argument("--runs-dir", default="out/runs")
         ev.add_argument("--mode", choices=["single", "chunked"], default="single", help="which runs to read (default single)")
+        ev.add_argument("--dataset", choices=["original", "large"], default="original", help="large: thirds are labelled start/middle/end and there is no dev/held-out split")
         if name == "evaluate":
             ev.add_argument("--out", default="docs/results/eval_full_A", help="output base path (.json and .md are written; counts and ids only)")
         else:
@@ -186,7 +188,7 @@ def evaluate_cmd(args: argparse.Namespace) -> int:
     if truth is None:
         print("gcw: --truth is required for evaluate", file=sys.stderr)
         return 2
-    res = evaluate.evaluate_runs(df, aliases, runs, truth, mode=args.mode)
+    res = evaluate.evaluate_runs(df, aliases, runs, truth, mode=args.mode, dataset=args.dataset)
     j, m = evaluate.write_results(res, args.out)
     print(f"gcw: evaluated {res['n_runs']} runs; wrote {j} and {m} (counts and ids only)")
     return 0
@@ -372,7 +374,7 @@ def analyze_cmd(args: argparse.Namespace) -> int:
     import random
 
     from gcw import analyze as az
-    from gcw import chunked, cost, privacy
+    from gcw import chunked, cost, llm, privacy
     chat = Path(args.chat)
     if not chat.is_file():
         print(f"gcw: chat file not found: {chat}", file=sys.stderr)
@@ -387,13 +389,20 @@ def analyze_cmd(args: argparse.Namespace) -> int:
         from gcw import dataset
 
         try:
-            dataset.verify_dataset()
+            dataset.verify_dataset()  # the original dataset is always verified first
         except dataset.DatasetError as e:
             print(f"gcw: {e}", file=sys.stderr)
             return 3
-        if not dataset.is_frozen_chat(chat):
-            print("gcw: --require-frozen-dataset: the chat is not the frozen synthetic chat", file=sys.stderr)
+        which = dataset.which_frozen(chat)
+        if which is None:
+            print("gcw: --require-frozen-dataset: the chat is not the frozen synthetic chat (original or large)", file=sys.stderr)
             return 3
+        if which == "large":
+            try:
+                dataset.verify_large_dataset()
+            except dataset.DatasetError as e:
+                print(f"gcw: {e}", file=sys.stderr)
+                return 3
     aliases = None
     if args.aliases:
         try:
@@ -414,6 +423,7 @@ def analyze_cmd(args: argparse.Namespace) -> int:
     if report.n_messages == 0:
         print("gcw: no messages could be parsed from this file", file=sys.stderr)
         return 3
+    client = llm.get_client(max_retries=0) if args.no_retry else None
     mode = args.mode
     if mode == "auto":
         if not (args.count or args.confirm):
@@ -421,9 +431,12 @@ def analyze_cmd(args: argparse.Namespace) -> int:
             return 2
         try:
             probe = az.run_analysis(df, aliases, config=args.config, slice_start=args.slice_start, slice_end=args.slice_end, count_only=True, budget=args.budget,
-                                    phase=args.phase, max_input_tokens=10**9, label_suffix=args.label)
+                                    phase=args.phase, max_input_tokens=10**9, label_suffix=args.label, client=client)
         except (az.AnalysisError, cost.CostError, OSError, RuntimeError) as e:
             print(f"gcw: {e}", file=sys.stderr)
+            return 3
+        except Exception as e:  # an API error (rate limit, request size): reported once, verbatim, never retried here
+            print(f"gcw: API or request error ({type(e).__name__}): {e}", file=sys.stderr)
             return 3
         mode = chunked.choose_mode(probe["request_tokens"])
         print(f"auto: exact count {probe['request_tokens']} tokens, single-pass limit {chunked.SINGLE_PASS_LIMIT}: using {mode}")
@@ -438,18 +451,24 @@ def analyze_cmd(args: argparse.Namespace) -> int:
             return 0
         try:
             res = chunked.run_chunked(df, aliases, config=args.config, confirm=args.confirm, count_only=args.count, budget=args.budget, phase=args.phase,
-                                      label=args.label, workers=args.workers, save_response=args.save_response, truth_items=truth)
+                                      label=args.label, workers=args.workers, save_response=args.save_response, truth_items=truth, client=client)
         except (az.AnalysisError, cost.CostError, OSError, RuntimeError) as e:
             print(f"gcw: {e}", file=sys.stderr)
+            return 3
+        except Exception as e:  # an API error (rate limit, request size): reported once, verbatim, never retried here
+            print(f"gcw: API or request error ({type(e).__name__}): {e}", file=sys.stderr)
             return 3
         _print_chunked(res, args)
         return 0
     try:
         res = az.run_analysis(df, aliases, config=args.config, slice_start=args.slice_start, slice_end=args.slice_end, confirm=args.confirm,
                               count_only=args.count, budget=args.budget, truth_items=truth, label_suffix=args.label,
-                              phase=args.phase, save_response=args.save_response, max_input_tokens=args.max_input_tokens, max_run_cost=args.max_run_cost)
+                              phase=args.phase, save_response=args.save_response, max_input_tokens=args.max_input_tokens, max_run_cost=args.max_run_cost, client=client)
     except (az.AnalysisError, cost.CostError, OSError, RuntimeError) as e:
         print(f"gcw: {e}", file=sys.stderr)
+        return 3
+    except Exception as e:  # an API error (rate limit, request size): reported once, verbatim, never retried here
+        print(f"gcw: API or request error ({type(e).__name__}): {e}", file=sys.stderr)
         return 3
     lines = [r for r in res["prep"]["payload_text"].splitlines()]
     print(f"slice: {res['messages']} messages, {res['withheld']} withheld, {res['payload_bytes']} bytes, ~{res['rough_tokens']} tokens (rough, offline: bytes / 2.37)")
