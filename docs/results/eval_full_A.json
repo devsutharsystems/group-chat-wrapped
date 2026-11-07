@@ -61,6 +61,7 @@
   }
  },
  "messages": 5136,
+ "mode": "single",
  "n_runs": 3,
  "phase": "4a",
  "planted": {

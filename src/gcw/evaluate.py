@@ -694,7 +694,7 @@ def compare_modes(single: dict, chunked: dict, commit: str = "") -> str:
     p3 = all(d <= 1 for d in diffs.values())
     mom = [t for t, v in ps.items() if v["type"] == "moments"]
     L += ["## Predictions", "",
-          f"1. Chunked cost per run below 40% of single-pass: chunked mean {cost_c:.4f} against a limit of {0.4 * cost_s:.4f} (40% of the single-pass mean {cost_s:.4f}): **{'held' if p1 else 'did not hold'}**.",
+          f"1. Chunked cost per run below 40% of single-pass: chunked mean {cost_c:.4f} against a limit of {0.4 * cost_s:.4f}, which is 40% of the single-pass mean {cost_s:.4f}: **{'held' if p1 else 'did not hold'}**.",
           f"2. jL found (strict) in fewer chunked runs than in single-pass: chunked {jl_c} of {nc}, single-pass {jl_s} of {ns}: **{'held' if p2 else 'did not hold'}**.",
           f"3. Each of the six other jokes within one item-run of single-pass: differences {', '.join(f'{t} {d}' for t, d in sorted(diffs.items()))}: **{'held' if p3 else 'did not hold'}**.",
           f"4. Moments: no prediction. Strict found item-runs, single-pass {sum(ps[t]['found_strict_runs'] for t in mom)} of {len(mom) * ns}, chunked {sum(pc[t]['found_strict_runs'] for t in mom)} of {len(mom) * nc}.", ""]

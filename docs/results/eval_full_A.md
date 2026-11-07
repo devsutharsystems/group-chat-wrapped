@@ -1,4 +1,4 @@
-# Full-chat evaluation, config A, phase 4a (n = 3 runs)
+# Full-chat evaluation, single mode, config A, phase 4a (n = 3 runs)
 
 Messages in the payload: 5136. Counts, rates and planted ids only; no chat text. Ranges are over n = 3 runs; no ranking of anything.
 

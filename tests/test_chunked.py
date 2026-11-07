@@ -551,6 +551,9 @@ def test_evaluate_chunked_runs_and_compare_files(env, tmp_path):
     assert "commit abc1234" in md and "**held**" in md and "no prediction" in md.lower() and "| j1 |" in md
     low = md.lower()
     assert not any(w in low for w in evaluate.WINNER_WORDS)
+    f = tmp_path / "compare.md"
+    f.write_text(md)
+    assert scan_repo.scan_file(f, tmp_path, set()) == []  # short numbers only: the repo scanner's phone rule stays quiet
 
 
 def test_compare_modes_states_which_predictions_held_and_which_did_not():
