@@ -280,7 +280,7 @@ def _log_calls(calls: list[dict]) -> list[dict]:
 def run_chunked(df: pd.DataFrame, aliases: privacy.Aliases | None, *, config: str = "A", client: Any = None, guard: cost.CostGuard | None = None,
                 confirm: bool = False, count_only: bool = False, budget: float = PHASE_BUDGET_USD, phase: str = "4b", label: str = "chunked",
                 out_dir: str | Path = "out/runs", workers: int = WORKERS, save_response: bool = False, truth_items: list[dict] | None = None,
-                limit: int = CHUNK_LIMIT, keywords=None) -> dict:
+                limit: int = CHUNK_LIMIT, keywords=None, max_chunks: int | None = None) -> dict:
     """Offline unless count_only (exact counting, free, SENDS payload chunks to count_tokens) or confirm (then map, reduce, verify, merge)."""
     if config != "A":
         raise analyze.AnalysisError("chunked mode is defined for config A only (the frozen shape)")
@@ -306,6 +306,8 @@ def run_chunked(df: pd.DataFrame, aliases: privacy.Aliases | None, *, config: st
         raise analyze.AnalysisError(f"refused: a chunk request has {over[0]['tokens']} tokens, over the {MAP_CALL_STOP} stop")
     if count_only and not confirm:
         return result
+    if max_chunks is not None and len(chunks) > max_chunks:
+        raise analyze.AnalysisError(f"refused: the plan has {len(chunks)} chunks, more than --max-chunks {max_chunks}; nothing was sent for generation")
     return _run(result, client, guard, config, budget, phase, label, Path(out_dir), workers, save_response, truth_items, members_all)
 
 

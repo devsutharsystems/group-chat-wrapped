@@ -1,0 +1,377 @@
+{
+ "baseline_strict_found": [],
+ "density": {
+  "large chat": {
+   "fraction": 0.0039,
+   "payload_messages": 17097,
+   "planted_messages": 67
+  },
+  "original chat": {
+   "fraction": 0.013,
+   "payload_messages": 5136,
+   "planted_messages": 67
+  }
+ },
+ "dropped_evidence": [
+  {
+   "ambiguous": true,
+   "cited": "m015653",
+   "distance": 5000,
+   "evidence_index": 1,
+   "exact": true,
+   "item": "running_jokes[2]",
+   "n_matches": 4,
+   "nearest": "m010653",
+   "nearest_planted": "j3",
+   "planted_among_matches": [
+    "j3"
+   ],
+   "status": "other_message"
+  },
+  {
+   "ambiguous": true,
+   "cited": "m015525",
+   "distance": 1,
+   "evidence_index": 1,
+   "exact": true,
+   "item": "running_jokes[3]",
+   "n_matches": 4,
+   "nearest": "m015526",
+   "nearest_planted": "j5",
+   "planted_among_matches": [
+    "j5"
+   ],
+   "status": "other_message"
+  },
+  {
+   "ambiguous": true,
+   "cited": "m009535",
+   "distance": 9,
+   "evidence_index": 0,
+   "exact": true,
+   "item": "running_jokes[5]",
+   "n_matches": 4,
+   "nearest": "m009526",
+   "nearest_planted": "j4",
+   "planted_among_matches": [
+    "j4"
+   ],
+   "status": "other_message"
+  },
+  {
+   "ambiguous": true,
+   "cited": "m011150",
+   "distance": 27,
+   "evidence_index": 1,
+   "exact": true,
+   "item": "running_jokes[5]",
+   "n_matches": 51,
+   "nearest": "m011123",
+   "nearest_planted": null,
+   "planted_among_matches": [],
+   "status": "too_short"
+  },
+  {
+   "ambiguous": false,
+   "cited": "m011673",
+   "distance": 4,
+   "evidence_index": 0,
+   "exact": false,
+   "item": "moments[1]",
+   "n_matches": 1,
+   "nearest": "m011677",
+   "nearest_planted": null,
+   "planted_among_matches": [],
+   "status": "other_message"
+  },
+  {
+   "ambiguous": false,
+   "cited": "m015496",
+   "distance": null,
+   "evidence_index": 1,
+   "exact": false,
+   "item": "moments[1]",
+   "n_matches": 0,
+   "nearest": null,
+   "nearest_planted": null,
+   "planted_among_matches": [],
+   "status": "other_message"
+  },
+  {
+   "ambiguous": false,
+   "cited": "m014823",
+   "distance": 3,
+   "evidence_index": 0,
+   "exact": true,
+   "item": "awards[0]",
+   "n_matches": 1,
+   "nearest": "m014826",
+   "nearest_planted": null,
+   "planted_among_matches": [],
+   "status": "other_message"
+  },
+  {
+   "ambiguous": false,
+   "cited": "m015231",
+   "distance": 3676,
+   "evidence_index": 1,
+   "exact": true,
+   "item": "awards[0]",
+   "n_matches": 1,
+   "nearest": "m011555",
+   "nearest_planted": null,
+   "planted_among_matches": [],
+   "status": "other_message"
+  },
+  {
+   "ambiguous": false,
+   "cited": "m010506",
+   "distance": 4,
+   "evidence_index": 0,
+   "exact": true,
+   "item": "awards[1]",
+   "n_matches": 1,
+   "nearest": "m010510",
+   "nearest_planted": null,
+   "planted_among_matches": [],
+   "status": "other_message"
+  },
+  {
+   "ambiguous": false,
+   "cited": "m016718",
+   "distance": 11005,
+   "evidence_index": 1,
+   "exact": true,
+   "item": "awards[1]",
+   "n_matches": 1,
+   "nearest": "m005713",
+   "nearest_planted": null,
+   "planted_among_matches": [],
+   "status": "other_message"
+  },
+  {
+   "ambiguous": false,
+   "cited": "m011538",
+   "distance": null,
+   "evidence_index": 0,
+   "exact": false,
+   "item": "awards[2]",
+   "n_matches": 0,
+   "nearest": null,
+   "nearest_planted": null,
+   "planted_among_matches": [],
+   "status": "not_found"
+  },
+  {
+   "ambiguous": false,
+   "cited": "m015011",
+   "distance": 4714,
+   "evidence_index": 1,
+   "exact": false,
+   "item": "awards[2]",
+   "n_matches": 1,
+   "nearest": "m010297",
+   "nearest_planted": null,
+   "planted_among_matches": [],
+   "status": "other_message"
+  }
+ ],
+ "hypothetical_repoint_all": {
+  "evidence_total": 25,
+  "evidence_verified": 22,
+  "items_kept": {
+   "awards": 3,
+   "moments": 4,
+   "running_jokes": 0
+  },
+  "re_pointed": 9,
+  "strict_found": []
+ },
+ "hypothetical_repoint_unambiguous_only": {
+  "evidence_total": 25,
+  "evidence_verified": 19,
+  "items_kept": {
+   "awards": 3,
+   "moments": 4,
+   "running_jokes": 0
+  },
+  "re_pointed": 6,
+  "strict_found": []
+ },
+ "per_proposed_item": [
+  {
+   "evidence_items": 2,
+   "item": "running_jokes[0]",
+   "quoting_planted_lines": {}
+  },
+  {
+   "evidence_items": 2,
+   "item": "running_jokes[1]",
+   "quoting_planted_lines": {
+    "j1": 1
+   }
+  },
+  {
+   "evidence_items": 2,
+   "item": "running_jokes[2]",
+   "quoting_planted_lines": {
+    "j3": 2
+   }
+  },
+  {
+   "evidence_items": 2,
+   "item": "running_jokes[3]",
+   "quoting_planted_lines": {
+    "j5": 2
+   }
+  },
+  {
+   "evidence_items": 2,
+   "item": "running_jokes[4]",
+   "quoting_planted_lines": {
+    "j6": 2
+   }
+  },
+  {
+   "evidence_items": 2,
+   "item": "running_jokes[5]",
+   "quoting_planted_lines": {
+    "j4": 1
+   }
+  },
+  {
+   "evidence_items": 1,
+   "item": "moments[0]",
+   "quoting_planted_lines": {}
+  },
+  {
+   "evidence_items": 2,
+   "item": "moments[1]",
+   "quoting_planted_lines": {}
+  },
+  {
+   "evidence_items": 2,
+   "item": "moments[2]",
+   "quoting_planted_lines": {}
+  },
+  {
+   "evidence_items": 2,
+   "item": "moments[3]",
+   "quoting_planted_lines": {}
+  },
+  {
+   "evidence_items": 2,
+   "item": "awards[0]",
+   "quoting_planted_lines": {}
+  },
+  {
+   "evidence_items": 2,
+   "item": "awards[1]",
+   "quoting_planted_lines": {}
+  },
+  {
+   "evidence_items": 2,
+   "item": "awards[2]",
+   "quoting_planted_lines": {}
+  }
+ ],
+ "planted_quoted_by_any_proposed_item": {
+  "j1": {
+   "dropped": 0,
+   "items": 1,
+   "kept": 1
+  },
+  "j2": {
+   "dropped": 0,
+   "items": 0,
+   "kept": 0
+  },
+  "j3": {
+   "dropped": 1,
+   "items": 1,
+   "kept": 1
+  },
+  "j4": {
+   "dropped": 1,
+   "items": 1,
+   "kept": 0
+  },
+  "j5": {
+   "dropped": 1,
+   "items": 1,
+   "kept": 1
+  },
+  "j6": {
+   "dropped": 0,
+   "items": 1,
+   "kept": 2
+  },
+  "jL": {
+   "dropped": 0,
+   "items": 0,
+   "kept": 0
+  },
+  "m1": {
+   "dropped": 0,
+   "items": 0,
+   "kept": 0
+  },
+  "m2": {
+   "dropped": 0,
+   "items": 0,
+   "kept": 0
+  },
+  "m3": {
+   "dropped": 0,
+   "items": 0,
+   "kept": 0
+  }
+ },
+ "repetition_large": {
+  "repeated_over_3": 19,
+  "top_3grams": [
+   [
+    "so we can",
+    229
+   ],
+   [
+    "i think the",
+    198
+   ],
+   [
+    "and we can",
+    193
+   ],
+   [
+    "i keep thinking",
+    174
+   ],
+   [
+    "honestly i think",
+    170
+   ],
+   [
+    "on the way",
+    167
+   ],
+   [
+    "let's do it",
+    166
+   ],
+   [
+    "sounds like a",
+    165
+   ],
+   [
+    "honestly though i",
+    163
+   ],
+   [
+    "i'll sort the",
+    160
+   ]
+  ]
+ },
+ "run": "20261107T155152-A",
+ "schema": 1
+}

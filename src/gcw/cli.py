@@ -48,6 +48,8 @@ def build_parser() -> argparse.ArgumentParser:
     an.add_argument("--require-frozen-dataset", action="store_true", help="the chat must be a frozen synthetic chat (the original or the large one), each verified by its own function, checked first")
     an.add_argument("--no-retry", action="store_true", help="the API client never retries on its own (a 429 or a size error is reported once, verbatim)")
     an.add_argument("--expect-prompt-version", metavar="PREFIX..SUFFIX", help="abort unless PROMPT_VERSION starts with PREFIX and ends with SUFFIX (it is always printed)")
+    an.add_argument("--max-chunks", type=int, help="chunked mode: refuse after planning, before any map call, if the plan has more chunks than this")
+    an.add_argument("--expect-reduce-version", metavar="PREFIX..SUFFIX", help="abort unless REDUCE_PROMPT_VERSION starts with PREFIX and ends with SUFFIX")
     an.add_argument("--truth", help="ground_truth.json of a synthetic chat: score found planted items")
     an.add_argument("--label", default="slice", help="label suffix for the ledger entry")
     an.add_argument("--date-order", choices=["mdy", "dmy"], help="override the inferred day/month order")
@@ -73,6 +75,7 @@ def build_parser() -> argparse.ArgumentParser:
         ev.add_argument("--config", default="A")
         ev.add_argument("--runs-dir", default="out/runs")
         ev.add_argument("--mode", choices=["single", "chunked"], default="single", help="which runs to read (default single)")
+        ev.add_argument("--slice-end", help="the runs were made on the chat up to this day (YYYY-MM-DD); only planted items wholly inside are scored")
         ev.add_argument("--dataset", choices=["original", "large"], default="original", help="large: thirds are labelled start/middle/end and there is no dev/held-out split")
         if name == "evaluate":
             ev.add_argument("--out", default="docs/results/eval_full_A", help="output base path (.json and .md are written; counts and ids only)")
@@ -85,6 +88,19 @@ def build_parser() -> argparse.ArgumentParser:
     cm.add_argument("--chunked", default="docs/results/eval_full_chunked.json")
     cm.add_argument("--predictions-commit", default="", help="hash of the commit that holds the predictions")
     cm.add_argument("--out", default="docs/results/compare_single_vs_chunked.md")
+    cl = sub.add_parser("compare-large", help="FREE: four-row scale comparison from results files (dense single, sparse slice, sparse full single, sparse full chunked)")
+    cl.add_argument("--dense", default="docs/results/eval_full_A.json")
+    cl.add_argument("--sparse-slice", default="docs/results/eval_large_sparse_single.json")
+    cl.add_argument("--sparse-full", default="docs/results/eval_large_A.json")
+    cl.add_argument("--sparse-chunked", default="docs/results/eval_large_chunked.json")
+    cl.add_argument("--orig-chat", default="synthetic/frozen/chat_synthetic.txt")
+    cl.add_argument("--orig-truth", default="synthetic/frozen/ground_truth.json")
+    cl.add_argument("--chat", default="synthetic/frozen_large/chat_synthetic_large.txt")
+    cl.add_argument("--truth", default="synthetic/frozen_large/ground_truth.json")
+    cl.add_argument("--slice-end", default="2026-03-07")
+    cl.add_argument("--aliases", default="aliases.example.json")
+    cl.add_argument("--predictions-commit", default="")
+    cl.add_argument("--out", default="docs/results/compare_large.md")
     rs = sub.add_parser("rating-score", help="FREE: precision from a completed ratings.csv and key.json (counts only; refuses blank ratings)")
     rs.add_argument("--ratings", required=True, help="the completed ratings.csv (from the rating view)")
     rs.add_argument("--key", required=True, help="out/rating/key.json")
@@ -102,6 +118,8 @@ def _saved_runs(args: argparse.Namespace):
     """([(name, log, raw report)], df, aliases, truth) for the evaluate / rating-pack commands, or an exit code."""
     import json
 
+    import pandas as pd
+
     from gcw import evaluate, privacy
     from gcw.parser import messages
 
@@ -115,12 +133,16 @@ def _saved_runs(args: argparse.Namespace):
     except (OSError, ValueError, KeyError) as e:
         print(f"gcw: {e}", file=sys.stderr)
         return 2
-    files = evaluate.pick_runs(args.runs_dir, args.phase, args.config, args.mode)
+    files = evaluate.pick_runs(args.runs_dir, args.phase, args.config, args.mode, slice_end=getattr(args, 'slice_end', None))
     if not files:
         print(f"gcw: no saved runs of phase {args.phase}, config {args.config} in {args.runs_dir} (runs need --save-response)", file=sys.stderr)
         return 3
     df, _ = parse_chat(chat)
-    n_chat = int(messages(df).shape[0])
+    if getattr(args, "slice_end", None):
+        m = messages(df)
+        n_chat = int((m["ts"] < __import__("pandas").Timestamp(args.slice_end) + __import__("pandas").Timedelta(days=1)).sum())
+    else:
+        n_chat = int(messages(df).shape[0])
     runs = []
     for f in files:
         log, rep = evaluate.load_run(f)
@@ -178,6 +200,31 @@ def compare_modes_cmd(args: argparse.Namespace) -> int:
     return 0
 
 
+def compare_large_cmd(args: argparse.Namespace) -> int:
+    import json
+
+    from gcw import evaluate
+
+    try:
+        load = lambda p: json.loads(Path(p).read_text(encoding="utf-8"))  # noqa: E731
+        odf, _ = parse_chat(args.orig_chat)
+        ldf, _ = parse_chat(args.chat)
+        ot, lt = load(args.orig_truth)["items"], load(args.truth)["items"]
+        d_orig = evaluate.planted_density(odf, ot)["fraction"]
+        d_full = evaluate.planted_density(ldf, lt)["fraction"]
+        d_slice = evaluate.planted_density(ldf, lt, slice_end=args.slice_end)["fraction"]
+        rows = [("dense chat, single-pass", load(args.dense), d_orig), ("sparse chat, first third, single-pass", load(args.sparse_slice), d_slice),
+                ("sparse chat, whole, single-pass", load(args.sparse_full), d_full), ("sparse chat, whole, chunked", load(args.sparse_chunked), d_full)]
+        md = evaluate.compare_large(rows, args.predictions_commit)
+    except (OSError, ValueError, KeyError) as e:
+        print(f"gcw: {e}", file=sys.stderr)
+        return 3
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(md, encoding="utf-8")
+    print(f"gcw: wrote {args.out}")
+    return 0
+
+
 def evaluate_cmd(args: argparse.Namespace) -> int:
     from gcw import evaluate
 
@@ -188,8 +235,15 @@ def evaluate_cmd(args: argparse.Namespace) -> int:
     if truth is None:
         print("gcw: --truth is required for evaluate", file=sys.stderr)
         return 2
-    res = evaluate.evaluate_runs(df, aliases, runs, truth, mode=args.mode, dataset=args.dataset)
-    j, m = evaluate.write_results(res, args.out)
+    res = evaluate.evaluate_runs(df, aliases, runs, truth, mode=args.mode, dataset=args.dataset, slice_end=getattr(args, 'slice_end', None))
+    if args.mode == "chunked" and not args.slice_end:
+        d = evaluate.diagnose_chunked(df, aliases, runs, truth)
+        res["stage_diagnostic"] = d
+        j, m = evaluate.write_results(res, args.out)
+        with m.open("a", encoding="utf-8") as fh:
+            fh.write("\n" + evaluate.render_chunked_diagnostic(d))
+    else:
+        j, m = evaluate.write_results(res, args.out)
     print(f"gcw: evaluated {res['n_runs']} runs; wrote {j} and {m} (counts and ids only)")
     return 0
 
@@ -446,12 +500,17 @@ def analyze_cmd(args: argparse.Namespace) -> int:
             args.max_input_tokens = chunked.SINGLE_PASS_LIMIT
     if mode == "chunked":
         print(f"reduce prompt version: {chunked.REDUCE_PROMPT_VERSION}")
+        if args.expect_reduce_version:
+            pre, _, suf = args.expect_reduce_version.partition("..")
+            if not (chunked.REDUCE_PROMPT_VERSION.startswith(pre) and chunked.REDUCE_PROMPT_VERSION.endswith(suf)):
+                print(f"gcw: REDUCE_PROMPT_VERSION {chunked.REDUCE_PROMPT_VERSION} does not match the expected {args.expect_reduce_version}: the reduce prompt is frozen", file=sys.stderr)
+                return 3
         if not (args.count or args.confirm):
             print("chunked mode: nothing was sent. Exact chunk planning needs token counts: use --count (free, sends the payload chunks) or --confirm to run.")
             return 0
         try:
             res = chunked.run_chunked(df, aliases, config=args.config, confirm=args.confirm, count_only=args.count, budget=args.budget, phase=args.phase,
-                                      label=args.label, workers=args.workers, save_response=args.save_response, truth_items=truth, client=client)
+                                      label=args.label, workers=args.workers, save_response=args.save_response, truth_items=truth, client=client, max_chunks=args.max_chunks)
         except (az.AnalysisError, cost.CostError, OSError, RuntimeError) as e:
             print(f"gcw: {e}", file=sys.stderr)
             return 3
@@ -548,6 +607,8 @@ def main(argv: list[str] | None = None) -> int:
         return rating_score_cmd(args)
     if args.cmd == "compare-modes":
         return compare_modes_cmd(args)
+    if args.cmd == "compare-large":
+        return compare_large_cmd(args)
     if args.cmd == "review":
         return review_cmd(args)
     chat = Path(args.chat)

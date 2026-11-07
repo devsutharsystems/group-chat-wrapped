@@ -172,7 +172,7 @@ def chunked_classification(all_rows: list[dict], log: dict, raw: dict) -> dict:
     return summarise_classification(recs)
 
 
-def pick_runs(runs_dir: str | Path, phase: str, config: str = "A", mode: str = "single") -> list[Path]:
+def pick_runs(runs_dir: str | Path, phase: str, config: str = "A", mode: str = "single", slice_end: str | None = None) -> list[Path]:
     """Run logs (sorted by file name) of `phase` and `config` with a saved response, no error, and no slice (the whole chat). `mode`: single or chunked."""
     out = []
     for f in sorted(Path(runs_dir).glob("*.json")):
@@ -183,7 +183,7 @@ def pick_runs(runs_dir: str | Path, phase: str, config: str = "A", mode: str = "
         except ValueError:
             continue
         sl = log.get("slice") or {}
-        if (log.get("phase") == phase and log.get("config") == config and "error" not in log and sl.get("start") is None and sl.get("end") is None
+        if (log.get("phase") == phase and log.get("config") == config and "error" not in log and sl.get("start") is None and sl.get("end") == slice_end
                 and log.get("mode", "single") == mode):
             out.append(f)
     return out
@@ -224,16 +224,19 @@ def planted_groups(truth_items: list[dict], first_day: _date, last_day: _date, n
     return out
 
 
-def evaluate_runs(df: pd.DataFrame, aliases: privacy.Aliases | None, runs: list[tuple], truth_items: list[dict], mode: str = "single", dataset: str = "original") -> dict:
+def evaluate_runs(df: pd.DataFrame, aliases: privacy.Aliases | None, runs: list[tuple], truth_items: list[dict], mode: str = "single", dataset: str = "original", slice_end: str | None = None) -> dict:
     """runs: [(name, log, raw report)] for single-pass, or [(name, log, final verified report, raw map responses)] for mode='chunked' (the evidence statistics
     then come from the map calls, each classified against its own chunk). Returns the result dict (counts, rates and planted ids only: NO titles, summaries,
     quotes or message text)."""
-    prep = analyze.prepare(df, aliases, slice_start=None, slice_end=None)
+    prep = analyze.prepare(df, aliases, slice_start=None, slice_end=slice_end)
     index = prep["index"]
     ts = [r["ts"] for r in prep["rows"]]
     large = dataset == "large"
     gnames = ("start", "middle", "end") if large else ("first", "middle", "last")
     groups = planted_groups(truth_items, min(ts).date(), max(ts).date(), gnames, None if large else "2026-02-08")
+    # a slice scores ONLY planted items whose whole span lies inside it; items that are cut by the slice end are listed as partial and not scored
+    scope = {t for t, v in groups.items() if v["span"][1] <= slice_end} if slice_end else None
+    partial = sorted(t for t, v in groups.items() if v["span"][0] <= slice_end < v["span"][1]) if slice_end else []
     per_run: list[dict] = []
     lens: dict[str, dict[str, list[str]]] = {t: {"title": [], "summary": []} for t in SIZE_TYPES}
     found = {t: {"strict": 0, "lenient": 0, "by_date": 0} for t in groups}
@@ -249,13 +252,18 @@ def evaluate_runs(df: pd.DataFrame, aliases: privacy.Aliases | None, runs: list[
             verified, stats = verify.verify_report(report, index, valid_members=set(prep["members"]))
             summ = summarise_classification(classify_evidence(report, index))
         score = verify.match_planted(verified, index, truth_items, prep["mapping"], slice_start=min(ts), slice_end=max(ts))
+        keep = (lambda ids: [t for t in ids if scope is None or t in scope])  # noqa: E731
         for typ in TYPES:
+            score[typ]["planted_in_slice"] = keep(score[typ]["planted_in_slice"])
+            score[typ]["found_strict"] = keep(score[typ]["found_strict"])
+            score[typ]["found"] = keep(score[typ]["found"])
             for t in score[typ]["planted_in_slice"]:
                 planted_in.add(t)
             for t in score[typ]["found_strict"]:
                 found[t]["strict"] += 1
             for t in score[typ]["found"]:
                 found[t]["lenient"] += 1
+        score["moments"]["found_by_date"] = keep(score["moments"]["found_by_date"])
         for t in score["moments"]["found_by_date"]:
             found[t]["by_date"] += 1
         for typ in SIZE_TYPES:
@@ -301,7 +309,7 @@ def evaluate_runs(df: pd.DataFrame, aliases: privacy.Aliases | None, runs: list[
     moments = [t for t, v in planted.items() if v["type"] == "moments" and v["in_scope"]]
     by_date_total = sum(planted[t]["found_by_date_runs"] for t in moments)
     return {
-        "schema": 1, "mode": mode, "dataset": dataset, "phase": runs[0][1].get("phase") if runs else None, "config": runs[0][1].get("config") if runs else None, "n_runs": n, "messages": len(prep["rows"]),
+        "schema": 1, "mode": mode, "dataset": dataset, "slice_end": slice_end, "partial_items_not_scored": partial, "phase": runs[0][1].get("phase") if runs else None, "config": runs[0][1].get("config") if runs else None, "n_runs": n, "messages": len(prep["rows"]),
         "runs": per_run,
         "summary": {
             "rule_compliant_rate": _stat([r["rule_compliant_rate"] for r in per_run]), "grounding_rate": _stat([r["grounding_rate"] for r in per_run]),
@@ -338,8 +346,9 @@ def render_markdown(res: dict) -> str:
     """Markdown of the result dict: ranges and n only, no winner language. Numbers are written so the repo scanner's phone rule never matches
     (percent signs and semicolons, never two numbers separated by a space)."""
     n, s = res["n_runs"], res["summary"]
-    L = [f"# Full-chat evaluation, {res.get('mode', 'single')} mode, config {res['config']}, phase {res['phase']} (n = {n} runs)", "",
+    L = [f"# {'Slice' if res.get('slice_end') else 'Full-chat'} evaluation, {res.get('mode', 'single')} mode, config {res['config']}, phase {res['phase']} (n = {n} runs)", "",
          f"Messages in the payload: {res['messages']}. Counts, rates and planted ids only; no chat text. Ranges are over n = {n} runs; no ranking of anything.", "",
+         *([f"The payload is the slice that ends on {res['slice_end']}. Only planted items whose WHOLE span lies inside the slice are scored; items cut by the slice end ({', '.join(res['partial_items_not_scored']) or 'none'}) are not scored.", ""] if res.get("slice_end") else []),
          "## Per run", "", "| run | input tokens | output tokens | thinking tokens | stop reason | latency s | cost USD | items in (jokes; moments; awards) | items kept | evidence verified of total | rule-compliant | grounding |",
          "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in res["runs"]:
@@ -365,6 +374,9 @@ def render_markdown(res: dict) -> str:
           "| planted id | type | group | split | span from | span to | strict | lenient | by date |", "|---|---|---|---|---|---|---|---|---|"]
     for t, v in res["planted"].items():
         bd = v["found_by_date_runs"]
+        if not v["in_scope"]:
+            L.append(f"| {t} | {v['type']} | {v['group']} | {v['split']} | {v['span'][0]} | {v['span'][1]} | out of scope | out of scope | - |")
+            continue
         L.append(f"| {t} | {v['type']} | {v['group']} | {v['split']} | {v['span'][0]} | {v['span'][1]} | {v['found_strict_runs']} of {n} | {v['found_lenient_runs']} of {n} | {'-' if bd is None else f'{bd} of {n}'} |")
     for title, key in (("By third of the chat", "recall_by_third"), ("Dev versus held-out", "recall_by_split"), ("By type", "recall_by_type")):
         L += ["", f"### {title}", "", "| group | planted ids | strict found item-runs | lenient found item-runs | possible item-runs | strict recall | lenient recall |", "|---|---|---|---|---|---|---|"]
@@ -769,3 +781,176 @@ def render_chunked_diagnostic(d: dict) -> str:
         cell = lambda k: f"{'yes' if s[k]['present'] else 'no'} ({s[k]['items']} items; {s[k]['planted_evidence_messages']} planted messages)"  # noqa: E731
         L.append(f"| {m['run']} | {m['planted']} | {cell('raw_candidates')} | {cell('after_merge')} | {cell('after_rules')} | {cell('after_caps')} | {m['lost_at'] or ('not lost: never proposed' if m['never_proposed'] else 'present in the final report, not credited')} |")
     return "\n".join(L) + "\n"
+
+
+# ------------------------------------------------------------------ Phase 5b: diagnose a saved run (dropped evidence, planted lines, hypothetical re-pointing) and compare scopes
+def planted_density(df: pd.DataFrame, truth_items: list[dict], slice_end: str | None = None) -> dict:
+    """Planted payload messages over payload messages (messages(df), optionally up to the end of `slice_end`). A payload message is planted if a ground-truth
+    item has the same minute, sender and (cleaned) text."""
+    from gcw.parser import messages
+
+    pop = messages(df)
+    if slice_end:
+        pop = pop[pop["ts"] < pd.Timestamp(slice_end) + pd.Timedelta(days=1)]
+    key = lambda ts, s, t: (pd.Timestamp(ts).isoformat()[:16], s, normalise_for_match(privacy.clean(str(t))))  # noqa: E731
+    truth = {key(i["timestamp"], i["sender"], i["text"]) for i in truth_items}
+    planted = sum(1 for ts, s, t in zip(pop["ts"], pop["sender"], pop["text"]) if key(ts, s, t) in truth)
+    return {"planted_messages": planted, "payload_messages": int(len(pop)), "fraction": (planted / len(pop)) if len(pop) else None}
+
+
+def _walk_evidence(report: dict):
+    for typ in verify.TYPES:
+        raw = report.get(typ)
+        if not isinstance(raw, list):
+            continue
+        for pos, item in enumerate(raw):
+            evs = item.get("evidence") if isinstance(item, dict) else None
+            for k, ev in enumerate(evs if isinstance(evs, list) else []):
+                yield typ, pos, k, ev
+
+
+def diagnose_dropped(df: pd.DataFrame, aliases: privacy.Aliases | None, report: dict, truth_items: list[dict], slice_end: str | None = None) -> dict:
+    """Numbers and ids only. (a) every non-verified evidence item: cited id, nearest message whose normalised text CONTAINS the quote (distance in message
+    numbers, ambiguous when more than one message contains it, exact when it equals the whole message), and whether that message is a planted line; (b) per
+    proposed item, how many evidence items quote a planted line and of which planted item; (c) per planted item, whether any proposed item (kept or dropped
+    evidence) quotes a planted line of it, and a HYPOTHETICAL re-pointing of dropped quotes to their nearest match (measure only; the pipeline is untouched)."""
+    prep = analyze.prepare(df, aliases, slice_start=None, slice_end=slice_end)
+    index, rows = prep["index"], prep["rows"]
+    norm = {p: normalise_for_match(r["text"]) for p, r in index.items()}
+    occ = verify.planted_occurrences(truth_items, index, prep["mapping"])
+    planted_of = {p: t for t, rec in occ.items() for p, _ in rec["occurrences"]}
+    planted_text = {t: {norm[p] for p, _ in rec["occurrences"]} for t, rec in occ.items()}
+    recs = classify_evidence(report, index)
+    walk = list(_walk_evidence(report))
+
+    def matches(quote: str) -> list[str]:
+        q = normalise_for_match(quote)
+        return [p for p, t in norm.items() if q and q in t]
+
+    def nearest(cited: str, ms: list[str]) -> str | None:
+        return min(ms, key=lambda p: (abs(_num(p) - _num(cited)), p)) if ms else None
+
+    a, repair_all, repair_clear = [], {}, {}
+    for i, (rec, (typ, pos, k, ev)) in enumerate(zip(recs, walk)):
+        if rec["status"] == "verified":
+            continue
+        quote = rec.get("quote") or ""
+        ms = matches(quote)
+        near = nearest(rec["message_id"] or "", ms)
+        entry = {"item": f"{typ}[{pos}]", "evidence_index": k, "status": rec["status"], "cited": rec["message_id"], "nearest": near,
+                 "distance": abs(_num(near) - _num(rec["message_id"])) if near and rec["message_id"] else None, "n_matches": len(ms), "ambiguous": len(ms) > 1,
+                 "exact": bool(near) and norm[near] == normalise_for_match(quote), "nearest_planted": planted_of.get(near) if near else None,
+                 "planted_among_matches": sorted({planted_of[p] for p in ms if p in planted_of})}
+        a.append(entry)
+        if rec["status"] == "other_message" and near:
+            repair_all[(typ, pos, k)] = near
+            if len(ms) == 1:
+                repair_clear[(typ, pos, k)] = near
+    b = []
+    quotes_planted: dict[str, dict[str, int]] = {t: {"kept": 0, "dropped": 0, "items": 0} for t in occ}
+    items_hit: dict[str, set] = {t: set() for t in occ}
+    for typ in verify.TYPES:
+        for pos, item in enumerate(report.get(typ) or []):
+            hits: Counter = Counter()
+            n_ev = 0
+            for (t2, p2, k, ev), rec in zip(walk, recs):
+                if (t2, p2) != (typ, pos):
+                    continue
+                n_ev += 1
+                q = normalise_for_match(ev.get("quote", "")) if isinstance(ev, dict) else ""
+                if len(q) < verify.MIN_QUOTE_CHARS:
+                    continue
+                for tid, texts in planted_text.items():
+                    if any(q in tx for tx in texts):
+                        hits[tid] += 1
+                        quotes_planted[tid]["kept" if rec["status"] == "verified" else "dropped"] += 1
+                        items_hit[tid].add((typ, pos))
+            b.append({"item": f"{typ}[{pos}]", "evidence_items": n_ev, "quoting_planted_lines": dict(hits)})
+    for t in quotes_planted:
+        quotes_planted[t]["items"] = len(items_hit[t])
+
+    def repaired(repairs: dict) -> dict:
+        out = json.loads(json.dumps(report))
+        for (typ, pos, k), near in repairs.items():
+            out[typ][pos]["evidence"][k]["message_id"] = near
+        verified, st = verify.verify_report(out, index, valid_members=set(prep["members"]))
+        ts = [r["ts"] for r in rows]
+        sc = verify.match_planted(verified, index, truth_items, prep["mapping"], slice_start=min(ts), slice_end=max(ts))
+        found = sorted(t for typ in ("running_jokes", "moments") for t in sc[typ]["found_strict"])
+        return {"re_pointed": len(repairs), "items_kept": st["items_kept_by_type"], "evidence_verified": st["evidence_verified"], "evidence_total": st["evidence_total"], "strict_found": found}
+
+    base, _ = verify.verify_report(report, index, valid_members=set(prep["members"]))
+    ts = [r["ts"] for r in rows]
+    sc0 = verify.match_planted(base, index, truth_items, prep["mapping"], slice_start=min(ts), slice_end=max(ts))
+    return {"schema": 1, "dropped_evidence": a, "per_proposed_item": b, "planted_quoted_by_any_proposed_item": quotes_planted,
+            "baseline_strict_found": sorted(t for typ in ("running_jokes", "moments") for t in sc0[typ]["found_strict"]),
+            "hypothetical_repoint_all": repaired(repair_all), "hypothetical_repoint_unambiguous_only": repaired(repair_clear)}
+
+
+def render_dropped_markdown(d: dict, dens: dict | None = None, rep: dict | None = None) -> str:
+    L = ["# Diagnosis of the saved near-1M run (numbers and ids only)", "",
+         "Definitions: the nearest verbatim match is the closest message (by id distance) whose normalised text contains the quote; ambiguous = the quote's text appears in more than one message; exact = it equals the whole message.", "",
+         "## (a) Dropped evidence items", "", "| item | evidence index | status | cited id | nearest match | distance | matches | ambiguous | exact | nearest is planted | planted among all matches |", "|---|---|---|---|---|---|---|---|---|---|---|"]
+    for e in d["dropped_evidence"]:
+        L.append(f"| {e['item']} | {e['evidence_index']} | {e['status']} | {e['cited']} | {e['nearest'] or 'none'} | {e['distance'] if e['distance'] is not None else '-'} | {e['n_matches']} | {'yes' if e['ambiguous'] else 'no'} | {'yes' if e['exact'] else 'no'} | {e['nearest_planted'] or 'no'} | {', '.join(e['planted_among_matches']) or '-'} |")
+    L += ["", "## (b) Proposed items: evidence items that quote a planted line", "", "| item | evidence items | quoting planted lines (planted id: count) |", "|---|---|---|"]
+    for b in d["per_proposed_item"]:
+        L.append(f"| {b['item']} | {b['evidence_items']} | {', '.join(f'{k}: {v}' for k, v in sorted(b['quoting_planted_lines'].items())) or 'none'} |")
+    L += ["", "## (c) Planted items", "", "Evidence quoting a planted line of the item, by any proposed item of any type:", "", "| planted id | proposed items | evidence kept | evidence dropped |", "|---|---|---|---|"]
+    for t, v in sorted(d["planted_quoted_by_any_proposed_item"].items()):
+        L.append(f"| {t} | {v['items']} | {v['kept']} | {v['dropped']} |")
+    r0, r1, r2 = d["baseline_strict_found"], d["hypothetical_repoint_all"], d["hypothetical_repoint_unambiguous_only"]
+    L += ["", "Hypothetical re-pointing (measure only; the pipeline is unchanged):", "",
+          f"- as run: strict found {', '.join(r0) or 'none'}",
+          f"- every dropped quote re-pointed to its nearest verbatim match ({r1['re_pointed']} quotes): evidence verified {r1['evidence_verified']} of {r1['evidence_total']}; items kept {r1['items_kept']}; strict found {', '.join(r1['strict_found']) or 'none'}",
+          f"- only unambiguous quotes re-pointed ({r2['re_pointed']} quotes): evidence verified {r2['evidence_verified']} of {r2['evidence_total']}; items kept {r2['items_kept']}; strict found {', '.join(r2['strict_found']) or 'none'}", ""]
+    if dens:
+        L += ["## (d) Planted-line density", "", "| chat | planted messages | payload messages | fraction |", "|---|---|---|---|"]
+        for name, v in dens.items():
+            L.append(f"| {name} | {v['planted_messages']} | {v['payload_messages']} | {100 * v['fraction']:.2f}% |")
+        L.append("")
+    if rep:
+        L += ["Large chat, planted lines excluded: " + f"{rep['repeated_over_3']} distinct messages of 4+ words appear more than 3 times. Top 10 word 3-grams with counts: " + "; ".join(f"{g} {c}" for g, c in rep["top_3grams"][:10]) + ".", ""]
+    return "\n".join(L)
+
+
+def compare_large(rows: list[tuple[str, dict, float]], commit: str = "") -> str:
+    """rows: [(label, results dict, planted density fraction in that scope)] in the order dense single, sparse slice single, sparse full single, sparse full chunked.
+    Counts, rates and ids only. States which of the written predictions held from the numbers; no ranking language."""
+    def stat(res: dict) -> dict:
+        r = res["runs"]
+        n = res["n_runs"]
+        sf = sum(v["strict_found_item_runs"] for v in res["recall_by_type"].values())
+        poss = sum(v["possible_item_runs"] for v in res["recall_by_type"].values())
+        ids = sorted(t for v in res["recall_by_type"].values() for t in v["items"])
+        ev_t = sum(x["evidence_total"] for x in r)
+        ev_v = sum(x["evidence_verified"] for x in r)
+        unp = {t: sum(x["unplanted_items"][t] for x in r) for t in TYPES}
+        mean = lambda k: sum(x[k] for x in r) / n  # noqa: E731
+        return {"n": n, "tokens": mean("input_tokens"), "strict": sf, "possible": poss, "ids": ids, "ev_v": ev_v, "ev_t": ev_t, "unplanted": unp,
+                "cost": mean("cost_usd"), "lat": mean("latency_s"), "msgs": res["messages"]}
+    S = [stat(res) for _, res, _ in rows]
+    L = ["# Scale comparison on the large synthetic chat (config A, prompt v1; counts and ids only, no chat text)", "",
+         f"Predictions were written to `docs/PRD.md` and committed before any live call{(' in commit ' + commit) if commit else ''}. n is the number of runs per row; rows with n = 1 are single observations. "
+         "Costs are computed from usage fields times list prices (requests above 100,000 prompt tokens use the higher tier) and are not reconciled with the Console. "
+         "The planted density differs between rows, so the rows are not a controlled comparison: the large chat holds the same 67 planted lines as the original in 3.3 times more chat.", "",
+         "| row | n | messages | input tokens (mean) | planted density | planted items in scope | strict found (item-runs) | verified evidence | unplanted items (awards / moments / jokes) | cost USD per run | latency s per run |",
+         "|---|---|---|---|---|---|---|---|---|---|---|"]
+    for (label, _, dens), s in zip(rows, S):
+        L.append(f"| {label} | {s['n']} | {s['msgs']} | {s['tokens']:.0f} | {dens * 100:.2f}% | {', '.join(s['ids'])} | {s['strict']} of {s['possible']} | {s['ev_v']} of {s['ev_t']} ({s['ev_v'] / s['ev_t']:.0%}) | "
+                 f"{s['unplanted']['awards']} / {s['unplanted']['moments']} / {s['unplanted']['running_jokes']} | {s['cost']:.4f} | {s['lat']:.1f} |")
+    ch, sp, ful = S[3], S[1], S[2]
+    p1, p2 = ch["cost"] < 0.18, ch["ev_v"] / ch["ev_t"] >= 0.80
+    p3 = ch["strict"] >= 3
+    L += ["", "## Predictions (chunked run on the large chat)", "",
+          f"1. Chunked cost under $0.18: ${ch['cost']:.4f}: **{'held' if p1 else 'did not hold'}**.",
+          f"2. Verified-evidence rate at least 80% (over the map calls): {ch['ev_v']} of {ch['ev_t']} ({ch['ev_v'] / ch['ev_t']:.0%}): **{'held' if p2 else 'did not hold'}**.",
+          f"3. At least 3 of the 10 planted items found (strict): {ch['strict']} of {ch['possible']}: **{'held' if p3 else 'did not hold'}**.", "",
+          "## Recorded rule for the sparse slice", "",
+          f"If the sparse first-third control finds none of its scored planted items ({', '.join(sp['ids'])}), the README says signal sparsity, not context length alone, explains the near-1M result. "
+          f"The control found {sp['strict']} of {sp['possible']} (strict): the rule {'applies' if sp['strict'] == 0 else 'does not apply'}. "
+          f"The full-size single-pass row found {ful['strict']} of {ful['possible']}.", ""]
+    md = "\n".join(L) + "\n"
+    low = md.lower()
+    assert not any(w in low for w in WINNER_WORDS), "ranking language in the comparison"
+    return md
