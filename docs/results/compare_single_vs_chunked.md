@@ -1,6 +1,6 @@
 # Single-pass versus chunked map-reduce (n = 3 runs and n = 3 runs; frozen synthetic chat; config A, prompt v1)
 
-Predictions were written to `docs/PRD.md` and committed before any chunked run in commit f12bba3. Counts and ids only; no chat text. Real chats differ: the synthetic planted items are easier than real jokes.
+Predictions were written to `docs/PRD.md` and committed before any chunked run in commit cd8e87f. Counts and ids only; no chat text. Real chats differ: the synthetic planted items are easier than real jokes.
 
 ## Planted items found (strict), in k of n runs
 

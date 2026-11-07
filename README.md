@@ -227,7 +227,7 @@ The review source is a saved config A run on the synthetic chat that I judged to
 
 ## History and publishing
 
-The git history of this repository is rewritten once before publishing, to remove build artefacts and local paths. Old-to-new commit hashes are listed in `docs/results/commit_map.md`, which the rewrite step writes. Until that step is done, `scripts/prepublish_check.py` fails, by design.
+The history of this repository was rewritten once before publishing, to remove build artefacts, local paths and personal email addresses: the author and committer of every commit were replaced by GitHub's no-reply address. The old-to-new commit hashes are in `docs/results/commit_map.md`. The rewrite kept every commit and their order (one to one), so the predictions for the chunked experiment (commit `cd8e87f`) and for the large-dataset experiments (commit `429cb2d`) were still committed before the live runs they predict. Commit messages, including Co-Authored-By trailers, were not changed. `scripts/prepublish_check.py` checks the rewritten history (no home-directory paths, no build artefacts, no large blobs).
 
 ## Licence
 

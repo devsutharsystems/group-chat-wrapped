@@ -107,7 +107,7 @@ Slice: start of chat through 2026-02-08 = 1,594 messages (5 withheld), 185,701 p
 
 ## PHASE 3b-FIX (OBSERVED 2026-11-06; same dev slice, same request, prompt v1)
 
-Prompt v1 hash (`analyze.PROMPT_VERSION`): `a4498b04960adc6bf7fd664cf5c6ef95dc206811d3169a02063b7d7952febc56`. The three 3b runs predate the hash but used the identical prompt text (unchanged since commit 6dab3ee). Exact request tokens 81,723 (count_tokens WITH output_config). Replication cost 6 calls = $0.0527; injection probe 6 calls = $0.0050; phase `3bfix` total $0.0577 of the $0.10 budget; ledger total $0.2428.
+Prompt v1 hash (`analyze.PROMPT_VERSION`): `a4498b04960adc6bf7fd664cf5c6ef95dc206811d3169a02063b7d7952febc56`. The three 3b runs predate the hash but used the identical prompt text (unchanged since commit ecc8f86). Exact request tokens 81,723 (count_tokens WITH output_config). Replication cost 6 calls = $0.0527; injection probe 6 calls = $0.0050; phase `3bfix` total $0.0577 of the $0.10 budget; ledger total $0.2428.
 
 **Free re-analysis of the three original 3b responses** (grounding = quote is in the cited message after normalisation, length rule ignored; rule-compliant = the verified definition):
 

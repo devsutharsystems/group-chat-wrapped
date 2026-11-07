@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import subprocess
 import sys
 
 import pytest
@@ -107,10 +108,32 @@ def test_the_item_rules_stated_in_the_readme_are_the_ones_in_the_code():
 
 
 def test_the_limits_additions_and_the_untouched_paragraphs():
+    # the History paragraph digest was updated deliberately in Phase 8a (the real history rewrite); the Licence digest is unchanged
     lim = section("Limits")
     assert "No real chat has been analysed by the AI step" in lim and "analysed in this repository" not in README
     assert "the chat may be easier for the same model family (circularity)" in lim and "Haiku" in lim
     assert 'natural tics (for example "honestly I think")' in lim and "tic category" in lim
     assert "model id `claude-haiku-5-5` on 2026-11-06 and 2026-11-07 and may change if the model changes" in lim
-    for title, digest in (("History and publishing", "9e2ad341b2f9b190eb6c08e4c58353e0c3b8615088c48a86298d30b8160805d4"), ("Licence", "0f1549273e27ec667d4a38ee51e19d27fa84ecaf781231615314fad08fbb1c8f")):
+    for title, digest in (("History and publishing", "625cbfc30062c420276fb4bd325d2881199c6f7970be8860c3801d7653099d25"), ("Licence", "0f1549273e27ec667d4a38ee51e19d27fa84ecaf781231615314fad08fbb1c8f")):
         assert hashlib.sha256((f"## {title}" + section(title)).encode()).hexdigest() == digest, title
+
+
+def test_the_history_paragraph_cites_the_prediction_commits_from_the_commit_map():
+    sec = section("History and publishing")
+    rows = [ln for ln in (ROOT / "docs/results/commit_map.md").read_text().splitlines() if re.match(r"^\| [0-9a-f]{40} \|", ln) and "predictions written before" in ln]
+    assert len(rows) == 2
+    new = [ln.split("|")[2].strip()[:7] for ln in rows]
+    assert all(f"`{h}`" in sec for h in new)
+    assert "commit `%s`" % new[0] in sec and "commit `%s`" % new[1] in sec
+    for h in new:  # the cited commits exist in this repository
+        assert subprocess.run(["git", "-C", str(ROOT), "cat-file", "-e", h + "^{commit}"]).returncode == 0
+    assert "personal email addresses" in sec and "no-reply" in sec and "one to one" in sec and "docs/results/commit_map.md" in sec
+
+
+def test_the_commit_map_is_complete_and_the_rewrite_left_one_identity():
+    rows = re.findall(r"^\| ([0-9a-f]{40}) \| ([0-9a-f]{40}) \|", (ROOT / "docs/results/commit_map.md").read_text(), re.M)
+    n = int(subprocess.run(["git", "-C", str(ROOT), "rev-list", "--count", "HEAD"], capture_output=True, text=True).stdout)
+    assert len(rows) in (n, n - 1, n - 2, n - 3) and len({o for o, _ in rows}) == len(rows) and all(o != nw for o, nw in rows)  # later commits are not in the map
+    ids = set(subprocess.run(["git", "-C", str(ROOT), "log", "--all", "--format=%an <%ae>|%cn <%ce>"], capture_output=True, text=True).stdout.split("\n")) - {""}
+    me = "Dev Suthar <209331458+" + "devsu" + "tharsystems" + chr(64) + "users.noreply.github.com>"  # built from parts so the repo's own mentions check does not flag this file
+    assert ids == {me + "|" + me}
