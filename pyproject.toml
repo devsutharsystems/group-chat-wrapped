@@ -17,3 +17,5 @@ gcw = ["data/*.json"]
 [tool.pytest.ini_options]
 pythonpath = ["src", "scripts", "synthetic"]
 testpaths = ["tests"]
+addopts = "-m 'not slow'"
+markers = ["slow: starts a real Chromium in a child process; run alone with `pytest -m slow` (one Chromium at a time)"]
