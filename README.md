@@ -8,7 +8,7 @@ Group Chat Wrapped turns a WhatsApp group export into a one-page card: counted s
 
 ## Why it differs from common WhatsApp analysers
 
-1. **Every AI claim is checked in code against the real message.** A running joke, moment or award is kept only if each of its evidence quotes is an exact substring of the cited message, and if it meets the item rules (a joke needs several quotes on more than one date). Items that fail are dropped, and the drop counts by reason are reported in the run output and in `docs/results/`. A claim the model cannot back with a real quote does not reach the card. What the code checks is that every kept quote exists in the cited message and meets the item rules; it does not check whether the quotes support the item's title and summary. That is what the hand rating will measure.
+1. **Every AI claim is checked in code against the real message.** A running joke, moment or award is kept only if each of its evidence quotes is an exact substring of the cited message, and if it meets the item rules (a joke needs several quotes on more than one date). Items that fail are dropped, and the drop counts by reason are reported in the run output and in `docs/results/`. A claim the model cannot back with a real quote does not reach the card. What the code checks is that every kept quote exists in the cited message and meets the item rules; it does not check whether the quotes support the item's title and summary. That is what the hand rating measures (see Precision below).
 2. **Privacy by design, with the limits stated.** Names are replaced before anything is sent, a keyword screen withholds sensitive messages, and `preview` shows the exact text that would be sent. Stats-only mode (the default) makes no network call. AI mode needs an explicit consent step and runs under a cost cap. Pseudonymised text is still sent to Anthropic in AI mode; see the privacy section.
 3. **A measured evaluation on a synthetic chat with planted ground truth.** The test chats contain jokes, moments and other items planted at known positions, so recall numbers, and precision once the hand ratings exist, are computed rather than asserted. The numbers, their sample sizes and their limits are below; they are not claims about real chats.
 
@@ -118,7 +118,19 @@ Screenshot harness (a development tool, not part of the app's footprint; ceiling
 **Precision.**
 
 <!-- BEGIN:precision_block -->
-Precision: not yet measured (hand-rating pending)
+Precision of the verified items from hand ratings (40 items; strict = rated true, lenient = true plus partly; Wilson 95% interval). The three runs are not independent samples: they read the same chat with the same prompt, so the same items and the same mistakes recur across runs and the intervals below understate the real uncertainty.
+
+| group | n | strict | lenient |
+|---|---|---|---|
+| overall | 40 | 21 of 40; p 0.525; interval lo 0.375; hi 0.671 | 39 of 40; p 0.975; interval lo 0.871; hi 0.996 |
+| awards | 7 | 2 of 7; p 0.286; interval lo 0.082; hi 0.641 | 6 of 7; p 0.857; interval lo 0.487; hi 0.974 |
+| moments | 12 | 1 of 12; p 0.083; interval lo 0.015; hi 0.354 | 12 of 12; p 1.000; interval lo 0.757; hi 1.000 |
+| running_jokes | 21 | 18 of 21; p 0.857; interval lo 0.654; hi 0.950 | 21 of 21; p 1.000; interval lo 0.845; hi 1.000 |
+| run 20261107T110344-A | 15 | 6 of 15; p 0.400; interval lo 0.198; hi 0.642 | 14 of 15; p 0.933; interval lo 0.702; hi 0.988 |
+| run 20261107T110407-A | 12 | 8 of 12; p 0.667; interval lo 0.391; hi 0.862 | 12 of 12; p 1.000; interval lo 0.757; hi 1.000 |
+| run 20261107T110421-A | 13 | 7 of 13; p 0.538; interval lo 0.291; hi 0.768 | 13 of 13; p 1.000; interval lo 0.772; hi 1.000 |
+| matching a planted item | 25 | 18 of 25; p 0.720; interval lo 0.524; hi 0.857 | 25 of 25; p 1.000; interval lo 0.867; hi 1.000 |
+| unplanted | 15 | 3 of 15; p 0.200; interval lo 0.070; hi 0.452 | 14 of 15; p 0.933; interval lo 0.702; hi 0.988 |
 <!-- END:precision_block -->
 
 **Frozen identifiers** (prompts, schema and verification rules are frozen; the datasets are checked by hash before any evaluation):
@@ -164,8 +176,7 @@ The review source is a saved config A run on the synthetic chat that I judged to
 - `--mode auto` switches to chunked above 300,000 exact tokens. The threshold is provisional and was set from a handful of runs (see `docs/PRD.md` R5); it replaced an earlier plan to fall back only at the model limit.
 - The planted long joke jL does not test long-range dependence: it has enough evidence inside single chunks.
 - The per-type caps rank by evidence count and date spread, which disadvantages moments (one-quote items); chunked and single-pass differ partly because of this.
-- Precision is reported only where the table above shows it; until the hand ratings exist, no precision figure is claimed.
-- Awards and unplanted items are not scored until they are hand-rated. The ratings are made by the author, who designed the dataset, so they are not blind.
+- Precision comes from hand ratings of the verified items of the three config A runs on the dense chat (Evaluation, Precision). The ratings were made by the author, who designed the dataset, so they are not blind. The three runs read the same chat with the same prompt, so the intervals understate the uncertainty. Strict precision is much lower than lenient for moments and awards, because most of those were rated partly true. No AI item from the large-chat runs was rated, so no precision is claimed for them.
 - The parser and the card were checked on one real Android export (US 12-hour clock, U+202F before AM/PM, 14 lines, one sender; `docs/results/real_format_check.md`).
 - The prompt-injection defence was probed on one synthetic chat with a few phrasings (`docs/results/injection_probe.md`); the README does not claim it is robust. Verification in code limits what an injected instruction can put on the card, nothing more.
 - Chat timestamps have minute resolution, so response-time medians are coarse (`docs/stats-verification.md`).

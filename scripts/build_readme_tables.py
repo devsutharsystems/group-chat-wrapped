@@ -105,6 +105,8 @@ def precision_block(root: Path) -> str:
          "| group | n | strict | lenient |", "|---|---|---|---|",
          f"| overall | {o['n']} | {evaluate._ci(o['strict'])} | {evaluate._ci(o['lenient'])} |"]
     L += [f"| {t} | {v['n']} | {evaluate._ci(v['strict'])} | {evaluate._ci(v['lenient'])} |" for t, v in r["by_type"].items()]
+    L += [f"| run {k} | {v['n']} | {evaluate._ci(v['strict'])} | {evaluate._ci(v['lenient'])} |" for k, v in r["by_run"].items()]
+    L += [f"| {label} | {r[key]['n']} | {evaluate._ci(r[key]['strict'])} | {evaluate._ci(r[key]['lenient'])} |" for label, key in (("matching a planted item", "planted_matching"), ("unplanted", "unplanted"))]
     return "\n".join(L)
 
 

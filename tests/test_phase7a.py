@@ -38,9 +38,9 @@ def test_the_precision_block_is_the_literal_line_until_the_ratings_exist(tmp_pat
     (tmp_path / "docs" / "results").mkdir(parents=True)
     assert btab.precision_block(tmp_path) == "Precision: not yet measured (hand-rating pending)"
     t = evaluate._tally(["true", "true", "false", "partly"])
-    (tmp_path / "docs" / "results" / "precision_A.json").write_text(json.dumps({"note": "n-note", "overall": t, "by_type": {"running_jokes": t}}))
+    (tmp_path / "docs" / "results" / "precision_A.json").write_text(json.dumps({"note": "n-note", "overall": t, "by_type": {"running_jokes": t}, "by_run": {"r1": t}, "planted_matching": t, "unplanted": t}))
     out = btab.precision_block(tmp_path)
-    assert "2 of 4" in out and "running_jokes" in out and "hand-rating pending" not in out
+    assert "2 of 4" in out and "running_jokes" in out and "| run r1 |" in out and "matching a planted item" in out and "| unplanted |" in out and "hand-rating pending" not in out
 
 
 def test_the_table_rows_and_columns_come_from_the_results_files():
@@ -107,7 +107,7 @@ def test_the_privacy_section_says_pseudonymised_text_goes_to_anthropic():
 
 def test_the_consolidated_limits_list_keeps_every_recorded_limit():
     lim = README.split("## Limits", 1)[1].split("\n## ", 1)[0].lower()
-    for k in ["synthetic", "n = 1", "of 10 planted items", "not demonstrated", "300,000", "provisional", "dev items", "jl does not test long-range", "disadvantages moments", "precision is reported only",
+    for k in ["synthetic", "n = 1", "of 10 planted items", "not demonstrated", "300,000", "provisional", "dev items", "jl does not test long-range", "disadvantages moments", "precision comes from hand ratings",
               "robust", "minute resolution", "english-only", "aliases file", "ios", "24-hour", "reconciled", "macos", "colour emoji", "one config"]:
         assert k in lim, k
     assert "commit_map.md" in README and "history" in README.lower()

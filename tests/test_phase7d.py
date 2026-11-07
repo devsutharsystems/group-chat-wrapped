@@ -226,11 +226,11 @@ def test_the_readme_wording_fixes_are_in_place():
     hero = README.split("\n\n")[2]
     assert "auto-approved for this demo, with no human review" in hero
     why = README.split("## Why it differs", 1)[1].split("## Quickstart", 1)[0]
-    assert "does not check whether the quotes support the item's title and summary" in why and "what the hand rating will measure" in why
+    assert "does not check whether the quotes support the item's title and summary" in why and "what the hand rating measures (see Precision below)" in why
     assert "recall numbers, and precision once the hand ratings exist" in why and "precision-style" not in README
     lim = README.split("## Limits", 1)[1].split("\n## ", 1)[0]
     assert "one real Android export (US 12-hour clock, U+202F before AM/PM, 14 lines, one sender; `docs/results/real_format_check.md`)" in lim
-    assert "Awards and unplanted items are not scored until they are hand-rated" in lim and "not blind" in lim
+    assert "not blind" in lim and "No AI item from the large-chat runs was rated" in lim and "until the hand ratings exist" not in lim
     assert "## History and publishing" in README  # that paragraph is untouched by this phase
 
 

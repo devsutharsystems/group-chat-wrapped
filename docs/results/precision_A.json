@@ -1,0 +1,225 @@
+{
+ "by_run": {
+  "20261107T110344-A": {
+   "false": 1,
+   "lenient": {
+    "hi": 0.9881,
+    "k": 14,
+    "lo": 0.7018,
+    "n": 15,
+    "p": 0.9333
+   },
+   "n": 15,
+   "partly": 8,
+   "strict": {
+    "hi": 0.6425,
+    "k": 6,
+    "lo": 0.1982,
+    "n": 15,
+    "p": 0.4
+   },
+   "tic": 0,
+   "true": 6
+  },
+  "20261107T110407-A": {
+   "false": 0,
+   "lenient": {
+    "hi": 1.0,
+    "k": 12,
+    "lo": 0.7575,
+    "n": 12,
+    "p": 1.0
+   },
+   "n": 12,
+   "partly": 4,
+   "strict": {
+    "hi": 0.8619,
+    "k": 8,
+    "lo": 0.3906,
+    "n": 12,
+    "p": 0.6667
+   },
+   "tic": 0,
+   "true": 8
+  },
+  "20261107T110421-A": {
+   "false": 0,
+   "lenient": {
+    "hi": 1.0,
+    "k": 13,
+    "lo": 0.7719,
+    "n": 13,
+    "p": 1.0
+   },
+   "n": 13,
+   "partly": 6,
+   "strict": {
+    "hi": 0.7679,
+    "k": 7,
+    "lo": 0.2914,
+    "n": 13,
+    "p": 0.5385
+   },
+   "tic": 0,
+   "true": 7
+  }
+ },
+ "by_type": {
+  "awards": {
+   "false": 1,
+   "lenient": {
+    "hi": 0.9743,
+    "k": 6,
+    "lo": 0.4869,
+    "n": 7,
+    "p": 0.8571
+   },
+   "n": 7,
+   "partly": 4,
+   "strict": {
+    "hi": 0.6411,
+    "k": 2,
+    "lo": 0.0822,
+    "n": 7,
+    "p": 0.2857
+   },
+   "tic": 0,
+   "true": 2
+  },
+  "moments": {
+   "false": 0,
+   "lenient": {
+    "hi": 1.0,
+    "k": 12,
+    "lo": 0.7575,
+    "n": 12,
+    "p": 1.0
+   },
+   "n": 12,
+   "partly": 11,
+   "strict": {
+    "hi": 0.3539,
+    "k": 1,
+    "lo": 0.0149,
+    "n": 12,
+    "p": 0.0833
+   },
+   "tic": 0,
+   "true": 1
+  },
+  "running_jokes": {
+   "false": 0,
+   "lenient": {
+    "hi": 1.0,
+    "k": 21,
+    "lo": 0.8454,
+    "n": 21,
+    "p": 1.0
+   },
+   "n": 21,
+   "partly": 3,
+   "strict": {
+    "hi": 0.9502,
+    "k": 18,
+    "lo": 0.6536,
+    "n": 21,
+    "p": 0.8571
+   },
+   "tic": 0,
+   "true": 18
+  }
+ },
+ "distinct_planted_covered": {
+  "lenient": 9,
+  "lenient_ids": [
+   "j1",
+   "j2",
+   "j3",
+   "j4",
+   "j5",
+   "j6",
+   "jL",
+   "m1",
+   "m2"
+  ],
+  "strict": 9,
+  "strict_ids": [
+   "j1",
+   "j2",
+   "j3",
+   "j4",
+   "j5",
+   "j6",
+   "jL",
+   "m1",
+   "m2"
+  ]
+ },
+ "interval": "Wilson 95%",
+ "n_items": 40,
+ "note": "The three runs are not independent samples: they read the same chat with the same prompt, so the same items and the same mistakes recur across runs and the intervals below understate the real uncertainty.",
+ "overall": {
+  "false": 1,
+  "lenient": {
+   "hi": 0.9956,
+   "k": 39,
+   "lo": 0.8712,
+   "n": 40,
+   "p": 0.975
+  },
+  "n": 40,
+  "partly": 18,
+  "strict": {
+   "hi": 0.6706,
+   "k": 21,
+   "lo": 0.375,
+   "n": 40,
+   "p": 0.525
+  },
+  "tic": 0,
+  "true": 21
+ },
+ "planted_matching": {
+  "false": 0,
+  "lenient": {
+   "hi": 1.0,
+   "k": 25,
+   "lo": 0.8668,
+   "n": 25,
+   "p": 1.0
+  },
+  "n": 25,
+  "partly": 7,
+  "strict": {
+   "hi": 0.8572,
+   "k": 18,
+   "lo": 0.5242,
+   "n": 25,
+   "p": 0.72
+  },
+  "tic": 0,
+  "true": 18
+ },
+ "schema": 1,
+ "unplanted": {
+  "false": 1,
+  "lenient": {
+   "hi": 0.9881,
+   "k": 14,
+   "lo": 0.7018,
+   "n": 15,
+   "p": 0.9333
+  },
+  "n": 15,
+  "partly": 11,
+  "strict": {
+   "hi": 0.4519,
+   "k": 3,
+   "lo": 0.0705,
+   "n": 15,
+   "p": 0.2
+  },
+  "tic": 0,
+  "true": 3
+ }
+}
