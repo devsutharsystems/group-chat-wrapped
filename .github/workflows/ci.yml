@@ -10,6 +10,10 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      # One folder for the browsers, used by the install step and by every test (the code and tests default to <repo>/.cache/ms-playwright; the workspace is the repo root).
+      # Variable and install command: https://playwright.dev/python/docs/browsers and https://playwright.dev/python/docs/ci
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.cache/ms-playwright
     strategy:
       fail-fast: false
       matrix:
@@ -27,10 +31,15 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install .
           python -m playwright install --with-deps chromium
+      - name: Diagnostic - browser folder (names only, top two levels)
+        run: |
+          echo "PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH"
+          test -d "$PLAYWRIGHT_BROWSERS_PATH" || { echo "the browser folder does not exist"; exit 1; }
+          find "$PLAYWRIGHT_BROWSERS_PATH" -mindepth 1 -maxdepth 2 -printf '%P\n' | sort
       - name: Tests (the slow render tests are deselected by pytest.ini_options)
         run: python -m pytest -q
       - name: Repository scan
         run: python scripts/scan_repo.py
-      - name: Pre-publish checks (red until precision_A.json and commit_map.md exist and the history is rewritten)
+      - name: Pre-publish checks
         if: matrix.python-version == '3.13'
         run: python scripts/prepublish_check.py
