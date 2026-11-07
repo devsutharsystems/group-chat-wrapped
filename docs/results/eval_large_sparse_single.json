@@ -1,0 +1,432 @@
+{
+ "config": "A",
+ "dataset": "large",
+ "found_by_date_moments": {
+  "found_item_runs": 1,
+  "items": [
+   "m1"
+  ],
+  "possible_item_runs": 1,
+  "recall": 1.0
+ },
+ "lengths": {
+  "awards": {
+   "summary": {
+    "max": 91,
+    "median": 81,
+    "min": 68,
+    "n": 3,
+    "share_le_110": 1.0
+   },
+   "title": {
+    "max": 17,
+    "median": 12,
+    "min": 10,
+    "n": 3,
+    "share_le_32": 1.0
+   }
+  },
+  "moments": {
+   "summary": {
+    "max": 106,
+    "median": 94.5,
+    "min": 93,
+    "n": 4,
+    "share_le_110": 1.0
+   },
+   "title": {
+    "max": 31,
+    "median": 23.5,
+    "min": 22,
+    "n": 4,
+    "share_le_32": 1.0
+   }
+  },
+  "running_jokes": {
+   "summary": {
+    "max": 103,
+    "median": 99,
+    "min": 94,
+    "n": 3,
+    "share_le_110": 1.0
+   },
+   "title": {
+    "max": 32,
+    "median": 25,
+    "min": 24,
+    "n": 3,
+    "share_le_32": 1.0
+   }
+  }
+ },
+ "messages": 5802,
+ "mode": "single",
+ "n_runs": 1,
+ "partial_items_not_scored": [
+  "jL"
+ ],
+ "phase": "5b",
+ "planted": {
+  "j1": {
+   "found_by_date_runs": null,
+   "found_lenient_runs": 1,
+   "found_strict_runs": 1,
+   "group": "middle",
+   "in_scope": true,
+   "span": [
+    "2025-11-16",
+    "2026-02-17"
+   ],
+   "split": "new-dataset",
+   "type": "running_jokes"
+  },
+  "j2": {
+   "found_by_date_runs": null,
+   "found_lenient_runs": 1,
+   "found_strict_runs": 1,
+   "group": "middle",
+   "in_scope": true,
+   "span": [
+    "2025-12-19",
+    "2026-01-06"
+   ],
+   "split": "new-dataset",
+   "type": "running_jokes"
+  },
+  "j3": {
+   "found_by_date_runs": null,
+   "found_lenient_runs": 0,
+   "found_strict_runs": 0,
+   "group": "end",
+   "in_scope": false,
+   "span": [
+    "2026-03-18",
+    "2026-06-25"
+   ],
+   "split": "new-dataset",
+   "type": "running_jokes"
+  },
+  "j4": {
+   "found_by_date_runs": null,
+   "found_lenient_runs": 0,
+   "found_strict_runs": 0,
+   "group": "end",
+   "in_scope": false,
+   "span": [
+    "2026-04-01",
+    "2026-05-25"
+   ],
+   "split": "new-dataset",
+   "type": "running_jokes"
+  },
+  "j5": {
+   "found_by_date_runs": null,
+   "found_lenient_runs": 0,
+   "found_strict_runs": 0,
+   "group": "end",
+   "in_scope": false,
+   "span": [
+    "2026-09-20",
+    "2026-10-24"
+   ],
+   "split": "new-dataset",
+   "type": "running_jokes"
+  },
+  "j6": {
+   "found_by_date_runs": null,
+   "found_lenient_runs": 0,
+   "found_strict_runs": 0,
+   "group": "end",
+   "in_scope": false,
+   "span": [
+    "2026-08-22",
+    "2026-11-02"
+   ],
+   "split": "new-dataset",
+   "type": "running_jokes"
+  },
+  "jL": {
+   "found_by_date_runs": null,
+   "found_lenient_runs": 0,
+   "found_strict_runs": 0,
+   "group": "long-range",
+   "in_scope": false,
+   "span": [
+    "2026-01-17",
+    "2026-10-07"
+   ],
+   "split": "new-dataset",
+   "type": "running_jokes"
+  },
+  "m1": {
+   "found_by_date_runs": 1,
+   "found_lenient_runs": 1,
+   "found_strict_runs": 1,
+   "group": "end",
+   "in_scope": true,
+   "span": [
+    "2026-02-07",
+    "2026-02-07"
+   ],
+   "split": "new-dataset",
+   "type": "moments"
+  },
+  "m2": {
+   "found_by_date_runs": 0,
+   "found_lenient_runs": 0,
+   "found_strict_runs": 0,
+   "group": "end",
+   "in_scope": false,
+   "span": [
+    "2026-04-25",
+    "2026-04-25"
+   ],
+   "split": "new-dataset",
+   "type": "moments"
+  },
+  "m3": {
+   "found_by_date_runs": 0,
+   "found_lenient_runs": 0,
+   "found_strict_runs": 0,
+   "group": "end",
+   "in_scope": false,
+   "span": [
+    "2026-10-17",
+    "2026-10-17"
+   ],
+   "split": "new-dataset",
+   "type": "moments"
+  }
+ },
+ "recall_by_split": {
+  "new-dataset": {
+   "items": [
+    "j1",
+    "j2",
+    "m1"
+   ],
+   "lenient_found_item_runs": 3,
+   "lenient_recall": 1.0,
+   "possible_item_runs": 3,
+   "runs": 1,
+   "strict_found_item_runs": 3,
+   "strict_recall": 1.0
+  }
+ },
+ "recall_by_third": {
+  "end": {
+   "items": [
+    "m1"
+   ],
+   "lenient_found_item_runs": 1,
+   "lenient_recall": 1.0,
+   "possible_item_runs": 1,
+   "runs": 1,
+   "strict_found_item_runs": 1,
+   "strict_recall": 1.0
+  },
+  "long-range": {
+   "items": [],
+   "lenient_found_item_runs": 0,
+   "lenient_recall": null,
+   "possible_item_runs": 0,
+   "runs": 1,
+   "strict_found_item_runs": 0,
+   "strict_recall": null
+  },
+  "middle": {
+   "items": [
+    "j1",
+    "j2"
+   ],
+   "lenient_found_item_runs": 2,
+   "lenient_recall": 1.0,
+   "possible_item_runs": 2,
+   "runs": 1,
+   "strict_found_item_runs": 2,
+   "strict_recall": 1.0
+  },
+  "start": {
+   "items": [],
+   "lenient_found_item_runs": 0,
+   "lenient_recall": null,
+   "possible_item_runs": 0,
+   "runs": 1,
+   "strict_found_item_runs": 0,
+   "strict_recall": null
+  }
+ },
+ "recall_by_type": {
+  "moments": {
+   "items": [
+    "m1"
+   ],
+   "lenient_found_item_runs": 1,
+   "lenient_recall": 1.0,
+   "possible_item_runs": 1,
+   "runs": 1,
+   "strict_found_item_runs": 1,
+   "strict_recall": 1.0
+  },
+  "running_jokes": {
+   "items": [
+    "j1",
+    "j2"
+   ],
+   "lenient_found_item_runs": 2,
+   "lenient_recall": 1.0,
+   "possible_item_runs": 2,
+   "runs": 1,
+   "strict_found_item_runs": 2,
+   "strict_recall": 1.0
+  }
+ },
+ "runs": [
+  {
+   "cost_usd": 0.1534,
+   "evidence_total": 37,
+   "evidence_verified": 29,
+   "found_by_date": [
+    "m1"
+   ],
+   "found_lenient": {
+    "moments": [
+     "m1"
+    ],
+    "running_jokes": [
+     "j1",
+     "j2"
+    ]
+   },
+   "found_strict": {
+    "moments": [
+     "m1"
+    ],
+    "running_jokes": [
+     "j1",
+     "j2"
+    ]
+   },
+   "grounding_rate": 0.8378,
+   "input_tokens": 296849,
+   "items_in": {
+    "awards": 3,
+    "moments": 4,
+    "running_jokes": 5
+   },
+   "items_kept": {
+    "awards": 3,
+    "moments": 4,
+    "running_jokes": 3
+   },
+   "latency_s": 13.782,
+   "name": "20261107T162630-A",
+   "output_tokens": 1987,
+   "planted_in_scope": {
+    "moments": [
+     "m1"
+    ],
+    "running_jokes": [
+     "j1",
+     "j2"
+    ]
+   },
+   "prompt_version": "a4498b04960adc6bf7fd664cf5c6ef95dc206811d3169a02063b7d7952febc56",
+   "rule_compliant_rate": 0.7838,
+   "status_counts": {
+    "id_missing": 1,
+    "not_found": 1,
+    "other_message": 4,
+    "too_short": 2,
+    "verified": 29
+   },
+   "stop_reason": "end_turn",
+   "thinking_tokens": 0,
+   "unplanted_items": {
+    "awards": 3,
+    "moments": 3,
+    "running_jokes": 0
+   }
+  }
+ ],
+ "schema": 1,
+ "slice_end": "2026-03-07",
+ "summary": {
+  "cost_usd": {
+   "max": 0.1534,
+   "mean": 0.1534,
+   "min": 0.1534,
+   "n": 1
+  },
+  "grounding_rate": {
+   "max": 0.8378,
+   "mean": 0.8378,
+   "min": 0.8378,
+   "n": 1
+  },
+  "items_kept": {
+   "awards": {
+    "max": 3,
+    "mean": 3,
+    "min": 3,
+    "n": 1
+   },
+   "moments": {
+    "max": 4,
+    "mean": 4,
+    "min": 4,
+    "n": 1
+   },
+   "running_jokes": {
+    "max": 3,
+    "mean": 3,
+    "min": 3,
+    "n": 1
+   }
+  },
+  "latency_s": {
+   "max": 13.782,
+   "mean": 13.782,
+   "min": 13.782,
+   "n": 1
+  },
+  "output_tokens": {
+   "max": 1987,
+   "mean": 1987,
+   "min": 1987,
+   "n": 1
+  },
+  "rule_compliant_rate": {
+   "max": 0.7838,
+   "mean": 0.7838,
+   "min": 0.7838,
+   "n": 1
+  },
+  "thinking_tokens": {
+   "max": 0,
+   "mean": 0,
+   "min": 0,
+   "n": 1
+  },
+  "unplanted_items": {
+   "awards": {
+    "max": 3,
+    "mean": 3,
+    "min": 3,
+    "n": 1
+   },
+   "moments": {
+    "max": 3,
+    "mean": 3,
+    "min": 3,
+    "n": 1
+   },
+   "running_jokes": {
+    "max": 0,
+    "mean": 0,
+    "min": 0,
+    "n": 1
+   }
+  }
+ }
+}
