@@ -1,0 +1,34 @@
+{
+ "n_messages": 17134,
+ "n_system": 9,
+ "per_sender": {
+  "Riley": 4495,
+  "Alex": 800,
+  "Sam": 3034,
+  "Kai": 3761,
+  "Maya": 3139,
+  "Jordan": 1905
+ },
+ "flags": {
+  "media": 491,
+  "edited": 473,
+  "multiline": 139,
+  "deleted": 37,
+  "planted": 67
+ },
+ "n_bursts": 242,
+ "n_batches": 479,
+ "span": [
+  "2025-11-06",
+  "2026-11-05"
+ ],
+ "bytes": 1882623,
+ "lines": 17282,
+ "chat_file": "chat_synthetic_large.txt",
+ "chat_sha256": "0a9f76f0117608ecd4fd3cdc503202e55a15dbe8a2427fc1d1d09d0b7c870b6e",
+ "chat_bytes": 1882623,
+ "ground_truth_sha256": "b442a82bc44249fe5e49dfeb5021f0539179072f188912946d653941be47f562",
+ "config": "synthetic/config_large.json",
+ "config_sha256": "4fd173a8d24d1acd51de68bf481ed4ce1ef378167357ca8837d7e0d092de3a3b",
+ "note": "Synthetic and fictional (claude-haiku-5-5 filler, planted ground truth). Separate from synthetic/frozen/. Checked by gcw.dataset.verify_large_dataset()."
+}

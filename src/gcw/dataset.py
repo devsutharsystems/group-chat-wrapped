@@ -61,8 +61,8 @@ LARGE_DIR = ROOT / "synthetic" / "frozen_large"
 LARGE_CHAT_FILE = "chat_synthetic_large.txt"
 LARGE_GROUND_TRUTH_FILE = "ground_truth.json"
 # Filled in when the dataset is frozen (scripts/freeze_large.py prints them). None = not frozen yet: every check fails closed.
-LARGE_CHAT_SHA256: str | None = None
-LARGE_GROUND_TRUTH_SHA256: str | None = None
+LARGE_CHAT_SHA256: str | None = "0a9f76f0117608ecd4fd3cdc503202e55a15dbe8a2427fc1d1d09d0b7c870b6e"
+LARGE_GROUND_TRUTH_SHA256: str | None = "b442a82bc44249fe5e49dfeb5021f0539179072f188912946d653941be47f562"
 
 
 def verify_large_dataset(directory: str | Path | None = None, *, chat_sha256: str | None = None, ground_truth_sha256: str | None = None) -> dict[str, str]:
