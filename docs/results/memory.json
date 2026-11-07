@@ -1,18 +1,153 @@
 {
-  "schema": 1,
-  "note": "Memory and wall-clock measurements recorded from the output of the commands named in 'source'. One run each, macOS, M2, 8 GB. Summed RSS probably overcounts pages shared between processes (unverified). Not a benchmark.",
+  "schema": 2,
+  "note": "Memory and wall-clock measurements. Every value was copied from the session output of the command named in its provenance; none was re-measured when this file was written. macOS, M2, 8 GB. Summed RSS probably overcounts pages shared between processes (unverified). Not a benchmark.",
   "render_paths": [
-    {"name": "stats card, app render path (no server, no screenshot browser)", "wall_clock_s": 2.97, "largest_process_bytes": 138428416, "process_tree_mb": 509,
-     "source": "/usr/bin/time -l and scripts guarded.py on a plain script calling appcore.render_png_bytes (Phase 6-fix)"},
-    {"name": "AI card, app render path (saved config A run, all items approved)", "wall_clock_s": 5.68, "largest_process_bytes": 244498432, "process_tree_mb": 455,
-     "source": "/usr/bin/time -l and guarded.py on pytest -m slow -k ai_card (Phase 6-fix3)"}
+    {
+      "name": "stats card, app render path (no server, no screenshot browser)",
+      "wall_clock_s": 2.97,
+      "largest_process_bytes": 138428416,
+      "process_tree_mb": 509,
+      "provenance": {
+        "run": "plain script calling appcore.render_png_bytes, measured with /usr/bin/time -l and guarded.py",
+        "phase": "6-fix",
+        "measured_on": "2026-11-07",
+        "copied_from_session_output": true
+      }
+    },
+    {
+      "name": "AI card, app render path (saved config A run, all items approved)",
+      "wall_clock_s": 5.68,
+      "largest_process_bytes": 244498432,
+      "process_tree_mb": 455,
+      "provenance": {
+        "run": "pytest -m slow -k ai_card, measured with /usr/bin/time -l and guarded.py",
+        "phase": "6-fix3",
+        "measured_on": "2026-11-07",
+        "copied_from_session_output": true
+      }
+    }
   ],
   "screenshot_harness": {
     "ceiling_mb": 1433,
-    "peak_total_rss_mb_per_step": [
-      ["server start", 198], ["browser start", 704], ["stats card (browser + server + render child)", 1171], ["payload preview (browser + server)", 814],
-      ["review (browser + server)", 959], ["review with Render card (browser + server + render child)", 1088]
-    ],
-    "source": "scripts/app_screenshots.py, the run that produced the committed images (Phase 6-fix4)"
+    "steps": [
+      {
+        "step": "server start",
+        "observed_mb": [
+          198
+        ],
+        "min_mb": 198,
+        "max_mb": 198,
+        "provenance": [
+          {
+            "mb": 198,
+            "run": "final harness run",
+            "phase": "6-fix4",
+            "measured_on": "2026-11-07",
+            "copied_from_session_output": true
+          }
+        ]
+      },
+      {
+        "step": "browser start",
+        "observed_mb": [
+          704
+        ],
+        "min_mb": 704,
+        "max_mb": 704,
+        "provenance": [
+          {
+            "mb": 704,
+            "run": "final harness run",
+            "phase": "6-fix4",
+            "measured_on": "2026-11-07",
+            "copied_from_session_output": true
+          }
+        ]
+      },
+      {
+        "step": "stats card (browser + server + render child)",
+        "observed_mb": [
+          1116,
+          1135,
+          1171
+        ],
+        "min_mb": 1116,
+        "max_mb": 1171,
+        "provenance": [
+          {
+            "mb": 1116,
+            "run": "the first harness run, stopped by the 1 GB sampler; value supplied by the project owner, the exact log line was not re-derived",
+            "phase": "6-fix",
+            "measured_on": "2026-11-07",
+            "copied_from_session_output": true
+          },
+          {
+            "mb": 1135,
+            "run": "harness run that produced the four-image set",
+            "phase": "6-fix3",
+            "measured_on": "2026-11-07",
+            "copied_from_session_output": true
+          },
+          {
+            "mb": 1171,
+            "run": "final harness run",
+            "phase": "6-fix4",
+            "measured_on": "2026-11-07",
+            "copied_from_session_output": true
+          }
+        ]
+      },
+      {
+        "step": "payload preview (browser + server)",
+        "observed_mb": [
+          814
+        ],
+        "min_mb": 814,
+        "max_mb": 814,
+        "provenance": [
+          {
+            "mb": 814,
+            "run": "final harness run",
+            "phase": "6-fix4",
+            "measured_on": "2026-11-07",
+            "copied_from_session_output": true
+          }
+        ]
+      },
+      {
+        "step": "review (browser + server)",
+        "observed_mb": [
+          959
+        ],
+        "min_mb": 959,
+        "max_mb": 959,
+        "provenance": [
+          {
+            "mb": 959,
+            "run": "final harness run",
+            "phase": "6-fix4",
+            "measured_on": "2026-11-07",
+            "copied_from_session_output": true
+          }
+        ]
+      },
+      {
+        "step": "review with Render card (browser + server + render child)",
+        "observed_mb": [
+          1088
+        ],
+        "min_mb": 1088,
+        "max_mb": 1088,
+        "provenance": [
+          {
+            "mb": 1088,
+            "run": "final harness run",
+            "phase": "6-fix4",
+            "measured_on": "2026-11-07",
+            "copied_from_session_output": true
+          }
+        ]
+      }
+    ]
   }
 }

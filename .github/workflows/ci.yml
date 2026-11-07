@@ -1,0 +1,36 @@
+# CI for the repository. It makes no API call and uses no secrets: tests/conftest.py blocks the Anthropic client and HTTP sends for the whole session.
+# Action versions follow the usage examples in the actions' own READMEs (setup-python and checkout v7).
+# UNVERIFIED until the first run: this workflow cannot run on the machine it was written on.
+name: ci
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.13']   # 3.11 is requires-python in pyproject.toml; 3.13 is the version in the setup-python README example
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # the pre-publish history checks need the whole history
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install (a regular install; the editable install is not used because of a local macOS .pth issue)
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install .
+          python -m playwright install --with-deps chromium
+      - name: Tests (the slow render tests are deselected by pytest.ini_options)
+        run: python -m pytest -q
+      - name: Repository scan
+        run: python scripts/scan_repo.py
+      - name: Pre-publish checks (red until precision_A.json and commit_map.md exist and the history is rewritten)
+        if: matrix.python-version == '3.13'
+        run: python scripts/prepublish_check.py

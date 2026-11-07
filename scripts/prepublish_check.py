@@ -16,6 +16,7 @@ sys.path.insert(0, str(HERE))
 import build_readme_tables as btab  # noqa: E402
 
 MAX_BYTES = 3 * 1024 * 1024
+MAX_BLOB = 1024 * 1024
 BIG_OK_PREFIX = "synthetic/frozen_large/"
 MARKER = re.compile(r"\b(pending|TODO|TBD)\b", re.I)
 SECRET_NAMES = {".env", "ratings.csv", "key.json"}
@@ -117,9 +118,50 @@ def images_exist(root: Path) -> tuple[bool, str]:
     return ok, f"{len(refs)} README image(s) exist and are tracked" if ok else ("README references no docs/img image" if not refs else "missing or untracked: " + ", ".join(missing))
 
 
+def _blobs(root: Path) -> list[tuple[int, str, str]]:
+    """[(size, sha, path)] of every blob reachable from any ref, largest first (git rev-list --objects --all | git cat-file --batch-check)."""
+    ls = subprocess.run(["git", "-C", str(root), "rev-list", "--objects", "--all"], capture_output=True, text=True, errors="replace")
+    cat = subprocess.run(["git", "-C", str(root), "cat-file", "--batch-check=%(objecttype) %(objectname) %(objectsize) %(rest)"], input=ls.stdout, capture_output=True, text=True, errors="replace")
+    out = []
+    for line in cat.stdout.splitlines():
+        parts = line.split(" ", 3)
+        if len(parts) >= 3 and parts[0] == "blob" and parts[2].isdigit():
+            out.append((int(parts[2]), parts[1][:10], parts[3] if len(parts) > 3 else ""))
+    return sorted(out, reverse=True)
+
+
+def blob_history(root: Path) -> tuple[bool, str]:
+    top = _blobs(root)[:5]
+    big = [b for b in _blobs(root) if b[0] > MAX_BLOB and not b[2].startswith(BIG_OK_PREFIX)]
+    listing = "; ".join(f"{size:,} B {path or '(no path)'}" for size, _, path in top) or "no blobs"
+    return not big, f"5 largest blobs in history: {listing}" + ("" if not big else f"; FAIL: {len(big)} blob(s) over 1 MB outside {BIG_OK_PREFIX}, e.g. {big[0][2]}")
+
+
+MENTION = re.compile(r"Prateek|\bmentor\b|\bLDS\b|Let'?s Data Science|\$5\b|key limit|devsuthar|Dev-Suthar", re.I)
+MENTION_SKIP = {"scripts/prepublish_check.py", "tests/test_phase7b.py"}  # these files define the patterns
+
+
+def mentions(root: Path) -> list[str]:
+    """Informational, never blocking: every tracked text line that names a person, programme or budget, for the owner to review."""
+    hits = []
+    for f in _tracked(root):
+        p = root / f
+        if f in MENTION_SKIP or not p.is_file() or p.suffix.lower() in {".png", ".jpg", ".gif", ".pdf", ".zip"}:
+            continue
+        try:
+            text = p.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        for n, line in enumerate(text.splitlines(), 1):
+            m = MENTION.search(line)
+            if m:
+                hits.append(f"{f}:{n} [{m.group(0)}] {line.strip()[:120]}")
+    return hits
+
+
 CHECKS = [("readme blocks fresh", readme_blocks_fresh), ("no pending/TODO/TBD markers", no_markers), ("precision_A.json exists", precision_exists), ("commit_map.md exists", commit_map_exists),
           ("scan_repo clean", scan_clean), ("history: no home-directory paths", users_history), ("history: no build artefacts", build_history), ("git status clean", git_clean),
-          ("no tracked file over 3 MB", big_files), ("LICENSE is MIT", license_mit), ("no secret or rating files tracked", no_secret_files), ("README images exist", images_exist)]
+          ("no tracked file over 3 MB", big_files), ("history: no blob over 1 MB", blob_history), ("LICENSE is MIT", license_mit), ("no secret or rating files tracked", no_secret_files), ("README images exist", images_exist)]
 
 
 def run(root: Path, out=print) -> int:
@@ -131,6 +173,10 @@ def run(root: Path, out=print) -> int:
             ok, msg = False, f"check crashed: {type(e).__name__}: {e}"
         out(f"{'PASS' if ok else 'FAIL'}  {name}: {msg}")
         failed += not ok
+    hits = mentions(root)
+    out(f"INFO  mentions (not blocking; you decide what stays): {len(hits)} line(s)")
+    for h in hits:
+        out(f"      {h}")
     out(f"{len(CHECKS) - failed} of {len(CHECKS)} checks passed")
     return 1 if failed else 0
 

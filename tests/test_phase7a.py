@@ -216,10 +216,10 @@ def test_run_prints_one_line_per_check_and_exits_nonzero_on_any_failure(tmp_path
     lines: list[str] = []
     monkeypatch.setattr(pp, "CHECKS", [("good", lambda r: (True, "fine")), ("bad", lambda r: (False, "broken")), ("crash", lambda r: 1 / 0)])
     assert pp.run(tmp_path, out=lines.append) == 1
-    assert lines[:3] == ["PASS  good: fine", "FAIL  bad: broken", lines[2]] and lines[2].startswith("FAIL  crash: check crashed: ZeroDivisionError") and lines[3] == "1 of 3 checks passed"
+    assert lines[:3] == ["PASS  good: fine", "FAIL  bad: broken", lines[2]] and lines[2].startswith("FAIL  crash: check crashed: ZeroDivisionError") and lines[-1] == "1 of 3 checks passed"
     monkeypatch.setattr(pp, "CHECKS", [("good", lambda r: (True, "fine"))])
     assert pp.run(tmp_path, out=lines.append) == 0
 
 
-def test_the_real_check_list_covers_the_twelve_required_checks():
-    assert len(pp.CHECKS) == 12 and {n for n, _ in pp.CHECKS} >= {"readme blocks fresh", "precision_A.json exists", "commit_map.md exists", "scan_repo clean", "git status clean", "LICENSE is MIT"}
+def test_the_real_check_list_covers_the_required_checks():
+    assert len(pp.CHECKS) == 13 and {n for n, _ in pp.CHECKS} >= {"readme blocks fresh", "precision_A.json exists", "commit_map.md exists", "scan_repo clean", "git status clean", "LICENSE is MIT"}

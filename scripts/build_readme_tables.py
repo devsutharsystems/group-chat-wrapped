@@ -76,12 +76,18 @@ def cost_block(root: Path) -> str:
         wall = _rng(s["wall_clock_s"]) if chunked and "wall_clock_s" in s else "n/a"
         L.append(f"| {label} | {_rng(s['cost_usd'], nd=4)} | {_rng(s['latency_s'])} | {wall} |")
     m = json.loads((root / "docs" / "results" / "memory.json").read_text(encoding="utf-8"))
-    L += ["", f"Memory and time of the card render paths ({m['note']})", "", "| render path | wall-clock (s) | largest process (MB) | summed over the process tree (MB) |", "|---|---|---|---|"]
+    L += ["", f"Memory and time of the card render paths ({m['note']})", "", "| render path | wall-clock (s) | largest process (MB) | summed over the process tree (MB) | provenance |", "|---|---|---|---|---|"]
     for p in m["render_paths"]:
-        L.append(f"| {p['name']} | {p['wall_clock_s']} | {p['largest_process_bytes'] / 1e6:.0f} | {p['process_tree_mb']} |")
+        pv = p["provenance"]
+        L.append(f"| {p['name']} | {p['wall_clock_s']} | {p['largest_process_bytes'] / 1e6:.0f} | {p['process_tree_mb']} | phase {pv['phase']}, {pv['measured_on']}, {pv['run']}; copied from session output: {'yes' if pv['copied_from_session_output'] else 'no'} |")
     h = m["screenshot_harness"]
-    L += ["", f"Screenshot harness (a development tool, not part of the app's footprint; ceiling {h['ceiling_mb']} MB), peak summed RSS per step:", "", "| step | peak (MB) |", "|---|---|"]
-    L += [f"| {k} | {v} |" for k, v in h["peak_total_rss_mb_per_step"]]
+    L += ["", f"Screenshot harness (a development tool, not part of the app's footprint; ceiling {h['ceiling_mb']} MB), peak summed RSS per step; steps with several observed runs show every value and the range:", "",
+          "| step | observed runs (MB) | min (MB) | max (MB) | provenance |", "|---|---|---|---|---|"]
+    for st in h["steps"]:
+        obs = ", ".join(f"{v:,}" for v in st["observed_mb"])
+        phases = "; ".join(sorted({f"phase {x['phase']}" for x in st["provenance"]}))
+        copied = "yes" if all(x["copied_from_session_output"] for x in st["provenance"]) else "no"
+        L.append(f"| {st['step']} | {obs} | {st['min_mb']:,} | {st['max_mb']:,} | {phases}, {st['provenance'][0]['measured_on']}; copied from session output: {copied} |")
     return "\n".join(L)
 
 

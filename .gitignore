@@ -20,3 +20,7 @@ data/synthetic/
 aliases.json
 *.egg-info/
 build/
+# data folder, ratings and keys (belt and braces: out/ is ignored too)
+data/
+ratings.csv
+key.json

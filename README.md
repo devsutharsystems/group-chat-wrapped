@@ -96,23 +96,23 @@ Cost is computed from the usage fields times list prices (a request above 100,00
 | sparse chat, 889K tokens, single-pass | 0.4483 | 39.8 | n/a |
 | sparse chat, 889K tokens, chunked | 0.1029 | 102.1 | 42.0 |
 
-Memory and time of the card render paths (Memory and wall-clock measurements recorded from the output of the commands named in 'source'. One run each, macOS, M2, 8 GB. Summed RSS probably overcounts pages shared between processes (unverified). Not a benchmark.)
+Memory and time of the card render paths (Memory and wall-clock measurements. Every value was copied from the session output of the command named in its provenance; none was re-measured when this file was written. macOS, M2, 8 GB. Summed RSS probably overcounts pages shared between processes (unverified). Not a benchmark.)
 
-| render path | wall-clock (s) | largest process (MB) | summed over the process tree (MB) |
-|---|---|---|---|
-| stats card, app render path (no server, no screenshot browser) | 2.97 | 138 | 509 |
-| AI card, app render path (saved config A run, all items approved) | 5.68 | 244 | 455 |
+| render path | wall-clock (s) | largest process (MB) | summed over the process tree (MB) | provenance |
+|---|---|---|---|---|
+| stats card, app render path (no server, no screenshot browser) | 2.97 | 138 | 509 | phase 6-fix, 2026-11-07, plain script calling appcore.render_png_bytes, measured with /usr/bin/time -l and guarded.py; copied from session output: yes |
+| AI card, app render path (saved config A run, all items approved) | 5.68 | 244 | 455 | phase 6-fix3, 2026-11-07, pytest -m slow -k ai_card, measured with /usr/bin/time -l and guarded.py; copied from session output: yes |
 
-Screenshot harness (a development tool, not part of the app's footprint; ceiling 1433 MB), peak summed RSS per step:
+Screenshot harness (a development tool, not part of the app's footprint; ceiling 1433 MB), peak summed RSS per step; steps with several observed runs show every value and the range:
 
-| step | peak (MB) |
-|---|---|
-| server start | 198 |
-| browser start | 704 |
-| stats card (browser + server + render child) | 1171 |
-| payload preview (browser + server) | 814 |
-| review (browser + server) | 959 |
-| review with Render card (browser + server + render child) | 1088 |
+| step | observed runs (MB) | min (MB) | max (MB) | provenance |
+|---|---|---|---|---|
+| server start | 198 | 198 | 198 | phase 6-fix4, 2026-11-07; copied from session output: yes |
+| browser start | 704 | 704 | 704 | phase 6-fix4, 2026-11-07; copied from session output: yes |
+| stats card (browser + server + render child) | 1,116, 1,135, 1,171 | 1,116 | 1,171 | phase 6-fix; phase 6-fix3; phase 6-fix4, 2026-11-07; copied from session output: yes |
+| payload preview (browser + server) | 814 | 814 | 814 | phase 6-fix4, 2026-11-07; copied from session output: yes |
+| review (browser + server) | 959 | 959 | 959 | phase 6-fix4, 2026-11-07; copied from session output: yes |
+| review with Render card (browser + server + render child) | 1,088 | 1,088 | 1,088 | phase 6-fix4, 2026-11-07; copied from session output: yes |
 <!-- END:cost_block -->
 
 **Precision.**
