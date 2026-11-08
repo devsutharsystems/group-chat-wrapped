@@ -49,6 +49,7 @@ def step_load():
     src = st.radio("Source", ["Upload an export", "Bundled synthetic demo chat"], key="source")
     if src.startswith("Upload"):
         up = st.file_uploader("WhatsApp export (.txt, or a .zip with one .txt chat file; other files in the zip are ignored)", type=["txt", "zip"], key="upload")
+        st.caption(appcore.upload_limit_note())
         if up is not None and st.button("Use this file", key="use_upload"):
             try:
                 st.session_state["text"] = appcore.read_upload(up.name, up.getvalue())

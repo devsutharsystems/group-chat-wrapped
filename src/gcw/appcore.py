@@ -27,6 +27,19 @@ MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 DEMO_CHAT = Path(__file__).resolve().parents[2] / "synthetic" / "frozen" / "chat_synthetic.txt"
 CONSENT_TEXT = "I understand that pseudonymised message text will be sent to Anthropic, and the group members consented"
 SENDER_LINES_NOTE = ("Sender lines include deleted messages and media. The stats card counts visible messages only: it leaves out deleted messages and system lines.")
+
+
+def upload_limit_mb() -> int:
+    """The effective Streamlit upload cap in MB (server.maxUploadSize; set in .streamlit/config.toml)."""
+    from streamlit import config
+    return int(config.get_option("server.maxUploadSize"))
+
+
+def upload_limit_note() -> str:
+    return (f"Uploads are limited to {upload_limit_mb()} MB. A zip with media over the limit should be unzipped and its .txt uploaded, "
+            "or the chat re-exported without media.")
+
+
 LEAK_WARNING = ("Only names and nicknames you list here are replaced by Member N before anything is sent. A nickname or surname you leave out stays in the message text "
                 "and would be sent as written.")
 MODES = ("auto", "single", "chunked")
