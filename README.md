@@ -193,7 +193,7 @@ For the 11 moments rated partly, the author's reason was mostly that the summary
 
 ## The app
 
-The app runs on 127.0.0.1 only (`.streamlit/config.toml`; usage statistics off) and has no hosted upload endpoint. Steps: load (a `.txt`, a `.zip` holding exactly one `.txt`, or the bundled synthetic chat), settings, stats card, AI (payload preview, consent, run), review. The chat stays in memory; the card is rendered in a child process; run logs hold counts only; review files hold item ids and statuses only.
+The app runs on 127.0.0.1 only (`.streamlit/config.toml`; usage statistics off) and has no hosted upload endpoint. Steps: load (a `.txt`; a `.zip` holding exactly one `.txt` chat file, where all other files in the zip, such as media and contact cards, are ignored and never read; or the bundled synthetic chat), settings, stats card, AI (payload preview, consent, run), review. The chat stays in memory; the card is rendered in a child process; run logs hold counts only; review files hold item ids and statuses only.
 
 ![Step 3: the stats card rendered in the app, AI sections off](docs/img/app_1_stats_card.png)
 *Stats card step after the real Render click (synthetic chat, stats-only mode).*

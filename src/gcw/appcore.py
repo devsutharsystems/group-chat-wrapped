@@ -44,39 +44,54 @@ class AppError(ValueError):
 
 
 # ------------------------------------------------------------------ upload handling (memory only)
+def _ignored_entry(info: zipfile.ZipInfo) -> bool:
+    """Entries the zip loader never reads: directories, macOS __MACOSX/ entries, hidden files (a name or folder starting with a dot) and anything that is not a .txt."""
+    name = info.filename
+    return info.is_dir() or name.startswith("__MACOSX/") or any(p.startswith(".") for p in name.split("/") if p) or not name.lower().endswith(".txt")
+
+
+def read_zip_text(data: bytes) -> tuple[str, int]:
+    """(text of the single .txt chat file in a zip, number of ignored file entries). Everything stays in memory and only the chosen entry is opened: the other files (media,
+    contact cards, hidden and macOS entries) are neither read nor extracted. Error messages never contain chat text."""
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(data))
+    except zipfile.BadZipFile as e:
+        raise AppError(f"not a readable zip file: {e}") from None
+    with zf:
+        files = [i for i in zf.infolist() if not i.is_dir()]
+        chats = [i for i in files if not _ignored_entry(i)]
+        if not chats:
+            raise AppError(f"no .txt chat file was found in the zip; it holds {len(files)} other file{'' if len(files) == 1 else 's'}")
+        if len(chats) > 1:
+            raise AppError(f"{len(chats)} .txt files were found in the zip; exactly one is required")
+        info = chats[0]
+        if info.flag_bits & 0x1:
+            raise AppError("the zip member is encrypted")
+        if info.file_size > MAX_UNCOMPRESSED:
+            raise AppError(f"the zip member is larger than {MAX_UNCOMPRESSED // (1024 * 1024)} MB uncompressed")
+        with zf.open(info) as fh:
+            raw = fh.read(MAX_UNCOMPRESSED + 1)  # the real size is enforced while reading, whatever the header claims
+        if len(raw) > MAX_UNCOMPRESSED:
+            raise AppError(f"the zip member is larger than {MAX_UNCOMPRESSED // (1024 * 1024)} MB uncompressed")
+    try:
+        return raw.decode("utf-8"), len(files) - 1
+    except UnicodeDecodeError:
+        raise AppError("the file is not UTF-8 text") from None
+
+
 def read_upload(name: str, data: bytes) -> str:
-    """Text of an uploaded .txt, or of the single .txt member of an uploaded .zip. Everything stays in memory; nothing is extracted to disk."""
+    """Text of an uploaded .txt, or of the single .txt chat file of an uploaded .zip (other files in the zip are ignored). Everything stays in memory; nothing is extracted to disk."""
     low = (name or "").lower()
     if len(data) > MAX_UPLOAD_BYTES:
         raise AppError(f"the file is larger than {MAX_UPLOAD_BYTES // (1024 * 1024)} MB")
     if low.endswith(".zip"):
+        return read_zip_text(data)[0]
+    if low.endswith(".txt"):
         try:
-            zf = zipfile.ZipFile(io.BytesIO(data))
-        except zipfile.BadZipFile as e:
-            raise AppError(f"not a readable zip file: {e}") from None
-        with zf:
-            members = [i for i in zf.infolist() if not i.is_dir() and not i.filename.startswith("__MACOSX/")]
-            if len(members) != 1:
-                raise AppError(f"the zip must contain exactly one .txt file, it has {len(members)} files")
-            info = members[0]
-            if not info.filename.lower().endswith(".txt"):
-                raise AppError("the zip member is not a .txt file")
-            if info.flag_bits & 0x1:
-                raise AppError("the zip member is encrypted")
-            if info.file_size > MAX_UNCOMPRESSED:
-                raise AppError(f"the zip member is larger than {MAX_UNCOMPRESSED // (1024 * 1024)} MB uncompressed")
-            with zf.open(info) as fh:
-                raw = fh.read(MAX_UNCOMPRESSED + 1)  # the real size is enforced while reading, whatever the header claims
-            if len(raw) > MAX_UNCOMPRESSED:
-                raise AppError(f"the zip member is larger than {MAX_UNCOMPRESSED // (1024 * 1024)} MB uncompressed")
-    elif low.endswith(".txt"):
-        raw = data
-    else:
-        raise AppError("upload a WhatsApp export (.txt) or a .zip holding one .txt file")
-    try:
-        return raw.decode("utf-8")
-    except UnicodeDecodeError:
-        raise AppError("the file is not UTF-8 text") from None
+            return data.decode("utf-8")
+        except UnicodeDecodeError:
+            raise AppError("the file is not UTF-8 text") from None
+    raise AppError("upload a WhatsApp export (.txt) or a .zip with one .txt chat file")
 
 
 def demo_text() -> str:

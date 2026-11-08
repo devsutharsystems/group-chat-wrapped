@@ -248,10 +248,9 @@ def test_upload_accepts_one_txt_and_one_zipped_txt_in_memory():
 
 
 @pytest.mark.parametrize("name, data, msg", [
-    ("c.zip", make_zip({"a.txt": b"x", "b.txt": b"y"}), "exactly one"),
-    ("c.zip", make_zip({"a.txt": b"x", "b.png": b"y"}), "exactly one"),
-    ("c.zip", make_zip({"a.png": b"x"}), "not a .txt"),
-    ("c.zip", make_zip({}), "exactly one"),
+    ("c.zip", make_zip({"a.txt": b"x", "b.txt": b"y"}), "2 .txt files were found in the zip; exactly one is required"),
+    ("c.zip", make_zip({"a.png": b"x"}), "no .txt chat file was found in the zip; it holds 1 other file"),
+    ("c.zip", make_zip({}), "no .txt chat file was found in the zip; it holds 0 other files"),
     ("c.zip", b"not a zip", "not a readable zip"),
     ("c.pdf", b"x", "upload a WhatsApp export"),
     ("c.txt", b"\xff\xfe\x00bad", "not UTF-8"),

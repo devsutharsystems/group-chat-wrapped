@@ -48,7 +48,7 @@ def step_load():
     st.caption("The chat stays in memory in this browser session. It is never written to disk by this app.")
     src = st.radio("Source", ["Upload an export", "Bundled synthetic demo chat"], key="source")
     if src.startswith("Upload"):
-        up = st.file_uploader("WhatsApp export (.txt, or a .zip holding exactly one .txt)", type=["txt", "zip"], key="upload")
+        up = st.file_uploader("WhatsApp export (.txt, or a .zip with one .txt chat file; other files in the zip are ignored)", type=["txt", "zip"], key="upload")
         if up is not None and st.button("Use this file", key="use_upload"):
             try:
                 st.session_state["text"] = appcore.read_upload(up.name, up.getvalue())
