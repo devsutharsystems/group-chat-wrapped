@@ -111,7 +111,7 @@ def test_the_item_rules_stated_in_the_readme_are_the_ones_in_the_code():
 def test_the_limits_additions_and_the_untouched_paragraphs():
     # the History paragraph digest was updated deliberately in Phase 8a (the real history rewrite) and again in Phase 8d (prediction wording, Claude Code sentence); the Licence digest is unchanged
     lim = section("Limits")
-    assert "No real chat has been analysed by the AI step" in lim and "analysed in this repository" not in README
+    assert "The author ran one real informal group chat through the app in AI mode once, on 2026-11-08, after the evaluation" in lim and "No real chat has been analysed by the AI step" not in lim and "analysed in this repository" not in README
     assert "the chat may be easier for the same model family (circularity)" in lim and "Haiku" in lim
     assert 'natural tics (for example "honestly I think")' in lim and "tic category" in lim
     assert "model id `claude-haiku-5-5` on 2026-11-06 and 2026-11-07 and may change if the model changes" in lim

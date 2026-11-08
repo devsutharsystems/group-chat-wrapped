@@ -211,7 +211,8 @@ The review source is a saved config A run on the synthetic chat that I judged to
 
 ## Limits
 
-- The test chats are synthetic and their planted items are easier than real jokes; results say nothing certain about real chats. No real chat has been analysed by the AI step, and dev items were seen during development, so the numbers are not blind.
+- The test chats are synthetic and their planted items are easier than real jokes; results say nothing certain about real chats. The author ran one real informal group chat through the app in AI mode once, on 2026-11-08, after the evaluation; its items were not hand-rated and no number is claimed from it. Dev items were seen during development, so the numbers are not blind.
+- Lines of the form "file name (file attached)", which Android exports with media contain, are now counted as media and shown to the model as `[media]` without the file name. This was tested on synthetic lines only; neither frozen chat contains such lines, so the evaluation numbers are unaffected, and the effect on AI items for exports with media was not evaluated.
 - The synthetic chat's filler was written by Haiku and the analysis uses Haiku, so the chat may be easier for the same model family (circularity).
 - The filler has natural tics (for example "honestly I think") that can look like running jokes, which is why the rating scheme has a tic category.
 - The results are for model id `claude-haiku-5-5` on 2026-11-06 and 2026-11-07 and may change if the model changes.

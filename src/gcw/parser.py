@@ -43,6 +43,9 @@ DEFAULT_SYSTEM_PATTERNS: tuple[str, ...] = (
 # Deleted messages (exact text after "Sender: "). "You deleted this message" is VERIFIED; others' deletions are UNVERIFIED.
 DEFAULT_DELETED_PATTERNS: tuple[str, ...] = ("You deleted this message", "This message was deleted")
 DEFAULT_MEDIA_PATTERNS: tuple[str, ...] = ("<Media omitted>",)
+# Android exports made with media write "IMG-20261011-WA0057.jpg (file attached)" instead (Phase 9g; seen by the author in a real export, tested on synthetic lines only).
+# The whole message text must be one file name plus " (file attached)"; a message with a caption after it is not matched.
+FILE_ATTACHED = re.compile(r"[^\s:/\\]+\.[A-Za-z0-9]{2,5} \(file attached\)")
 EDITED_SUFFIX = " <This message was edited>"
 _NEWLINE = re.compile(r"\r\n|\n|\r")  # NOT str.splitlines(): it also splits on U+2028, U+0085, \x0b, \x0c
 
@@ -232,7 +235,7 @@ def parse_chat(
             text, is_edited = text[: -len(EDITED_SUFFIX)], True
         out.append({
             "id": f"m{n:06d}", "ts": r["ts"], "sender": sender, "text": text,
-            "is_media": (not is_system) and text in media,
+            "is_media": (not is_system) and (text in media or FILE_ATTACHED.fullmatch(text) is not None),
             "is_deleted": (not is_system) and text in deleted,
             "is_edited": is_edited, "is_system": is_system,
         })
