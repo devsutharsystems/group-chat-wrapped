@@ -67,10 +67,11 @@ def step_load():
         return
     st.success(f"Loaded: {S('chat_label')}")
     c = st.columns(4)
-    c[0].metric("Messages", view["messages"])
+    c[0].metric("Sender lines", view["messages"])
     c[1].metric("System lines", view["system_lines"])
     c[2].metric("Unparsed lines", view["unparsed"])
     c[3].metric("Senders", len(view["senders"]))
+    st.caption(appcore.SENDER_LINES_NOTE)
     st.text(f"First message: {view['first']}   Last message: {view['last']}")
     st.text(f"Date order assumed: {'month/day' if view['date_order'] == 'mdy' else 'day/month'} (source: {view['date_order_source']})")
     if view["ambiguous"]:

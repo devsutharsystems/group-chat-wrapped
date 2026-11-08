@@ -66,7 +66,7 @@ PLAYWRIGHT_BROWSERS_PATH=.cache/ms-playwright PYTHONPATH=src .venv/bin/streamlit
 
 ## How it works
 
-1. **Parse** (`parser.py`): Android and iOS export formats, system and deleted lines separated, day/month order inferred with a warning when ambiguous.
+1. **Parse** (`parser.py`): Android and iOS export formats, system and deleted lines separated, day/month order inferred with a warning when ambiguous. The app's Step 1 counts sender lines, which include deleted messages and media; the stats card counts visible messages only (it leaves out deleted messages and system lines).
 2. **Stats** (`stats.py`, `card.py`): counted statistics over a date window, rendered to a 1080x1350 PNG by headless Chromium (no network during the render).
 3. **Privacy layer** (`privacy.py`, `textnorm.py`): sensitive-keyword screen, link, email, phone and number redaction, member names to `Member N`; output lines look like `m000123 | date time | Member 3 | text`.
 4. **Analysis** (`analyze.py`, `llm.py`): one request with a frozen v1 prompt and JSON schema; Claude Haiku returns running jokes, moments and awards with `{message_id, quote}` evidence. **Chunked mode** (`chunked.py`) splits the chat at day boundaries, runs the same request per chunk, and merges the findings with one extra call that only groups candidate ids; the evidence union is built by code and every rule is re-applied after the merge.
