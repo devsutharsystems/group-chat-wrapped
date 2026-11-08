@@ -11,7 +11,7 @@ address = "127.0.0.1"
 headless = true
 enableCORS = true
 enableXsrfProtection = true
-maxUploadSize = 50
+maxUploadSize = 200
 
 [global]
 developmentMode = false

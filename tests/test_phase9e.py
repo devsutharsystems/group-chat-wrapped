@@ -24,7 +24,7 @@ def cap_loaded():
 
 
 def test_the_cap_is_set_explicitly_in_the_config_file():
-    assert CAP == 50
+    assert CAP == 200 and appcore.MAX_UPLOAD_BYTES == CAP * 1024 * 1024
 
 
 def test_step_1_says_uploads_are_limited_with_the_real_cap_value(env, cap_loaded):  # noqa: F811
